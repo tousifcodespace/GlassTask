@@ -17,6 +17,8 @@ import { BottomTabBar, TabKey } from "@/components/bottom-tab-bar";
 import { GlassCard } from "@/components/glass-card";
 import { SettingsRow } from "@/components/settings-row";
 import { TAB_ROUTES } from "@/lib/tab-routes";
+import { useAuthStore } from "@/store/auth";
+import { useProfileStore } from "@/store/profile";
 import { ThemeMode, useSettingsStore } from "@/store/settings";
 import { toISODate, useTaskStore } from "@/store/tasks";
 
@@ -82,8 +84,7 @@ function StreakRing({ streak, goal = 30 }: { streak: number; goal?: number }) {
           strokeLinecap="round"
           strokeDasharray={`${circumference}, ${circumference}`}
           strokeDashoffset={dashOffset}
-          rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
       <View style={{ position: "absolute", alignItems: "center" }}>
@@ -104,6 +105,8 @@ function StreakRing({ streak, goal = 30 }: { streak: number; goal?: number }) {
 export default function ProfileScreen() {
   const router = useRouter();
   const tasks = useTaskStore((s) => s.tasks);
+  const profile = useProfileStore((s) => s.profile);
+  const logout = useAuthStore((s) => s.logout);
 
   const themeMode = useSettingsStore((s) => s.themeMode);
   const setThemeMode = useSettingsStore((s) => s.setThemeMode);
@@ -220,7 +223,7 @@ export default function ProfileScreen() {
                 className="text-[16px] font-bold mb-0.5"
                 style={{ color: "#f5f3ff" }}
               >
-                Tousif
+                {profile.fullName || "Add your name"}
               </Text>
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-2"
@@ -232,9 +235,10 @@ export default function ProfileScreen() {
                 className="text-[12px] mb-3"
                 style={{ color: "rgba(245,243,255,0.5)" }}
               >
-                Stay focused. Get things done.
+                {profile.bio || "Add a short bio"}
               </Text>
               <TouchableOpacity
+                onPress={() => router.push("/edit-profile")}
                 className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-full"
                 style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
               >
@@ -561,6 +565,7 @@ export default function ProfileScreen() {
           </GlassCard>
 
           <TouchableOpacity
+            onPress={logout}
             className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl mb-4"
             style={{
               backgroundColor: "rgba(180,40,50,0.15)",
