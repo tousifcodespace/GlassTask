@@ -3,6 +3,8 @@ import { useRouter } from "expo-router";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
+import { useAppTheme } from "@/hooks/use-app-theme";
+
 type ScreenHeaderProps = {
   title: string;
   subtitle?: string;
@@ -17,6 +19,7 @@ export function ScreenHeader({
   onBack,
 }: ScreenHeaderProps) {
   const router = useRouter();
+  const theme = useAppTheme();
 
   return (
     <View className="flex-row items-center justify-between mb-5">
@@ -33,22 +36,22 @@ export function ScreenHeader({
         }
         className="w-10 h-10 rounded-full items-center justify-center"
         style={{
-          backgroundColor: "rgba(255,255,255,0.06)",
+          backgroundColor: theme.chipBg,
           borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.12)",
+          borderColor: theme.chipBorder,
         }}
       >
-        <MaterialIcons name="chevron-left" size={22} color="#f5f3ff" />
+        <MaterialIcons name="chevron-left" size={22} color={theme.text} />
       </TouchableOpacity>
 
       <View className="items-center">
-        <Text className="text-[16px] font-bold" style={{ color: "#f5f3ff" }}>
+        <Text className="text-[16px] font-bold" style={{ color: theme.text }}>
           {title}
         </Text>
         {subtitle ? (
           <Text
             className="text-[9.5px] font-semibold tracking-widest"
-            style={{ color: "rgba(245,243,255,0.4)" }}
+            style={{ color: theme.textFaint }}
           >
             {subtitle}
           </Text>

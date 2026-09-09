@@ -3,17 +3,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Circle, Defs, Stop, LinearGradient as SvgGradient } from "react-native-svg";
+import Svg, {
+  Circle,
+  Defs,
+  Stop,
+  LinearGradient as SvgGradient,
+} from "react-native-svg";
 
 import { BottomTabBar, TabKey } from "@/components/bottom-tab-bar";
 import { GlassCard } from "@/components/glass-card";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { TAB_ROUTES } from "@/lib/tab-routes";
 import { Task, toISODate, useTaskStore } from "@/store/tasks";
 
@@ -70,11 +76,7 @@ function startOfWeek(date: Date): Date {
 }
 
 function addDays(date: Date, days: number): Date {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + days,
-  );
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 
 function startOfMonth(date: Date): Date {
@@ -123,7 +125,11 @@ function previousRange(period: Period, anchor: Date): [string, string] {
       return [toISODate(start), toISODate(addDays(start, 6))];
     }
     case "month": {
-      const prevMonthAnchor = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+      const prevMonthAnchor = new Date(
+        anchor.getFullYear(),
+        anchor.getMonth() - 1,
+        1,
+      );
       return [
         toISODate(startOfMonth(prevMonthAnchor)),
         toISODate(endOfMonth(prevMonthAnchor)),
@@ -131,7 +137,10 @@ function previousRange(period: Period, anchor: Date): [string, string] {
     }
     case "year": {
       const prevYearAnchor = new Date(anchor.getFullYear() - 1, 0, 1);
-      return [toISODate(startOfYear(prevYearAnchor)), toISODate(endOfYear(prevYearAnchor))];
+      return [
+        toISODate(startOfYear(prevYearAnchor)),
+        toISODate(endOfYear(prevYearAnchor)),
+      ];
     }
   }
 }
@@ -141,6 +150,7 @@ function inRange(iso: string, start: string, end: string): boolean {
 }
 
 function CircularProgress({ percent }: { percent: number }) {
+  const theme = useAppTheme();
   const size = 100;
   const strokeWidth = 9;
   const radius = (size - strokeWidth) / 2;
@@ -148,10 +158,24 @@ function CircularProgress({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
 
-  const label = clamped >= 80 ? "OPTIMAL" : clamped >= 50 ? "GOOD" : clamped > 0 ? "LOW" : "—";
+  const label =
+    clamped >= 80
+      ? "OPTIMAL"
+      : clamped >= 50
+        ? "GOOD"
+        : clamped > 0
+          ? "LOW"
+          : "—";
 
   return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Svg width={size} height={size}>
         <Defs>
           <SvgGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -163,7 +187,7 @@ function CircularProgress({ percent }: { percent: number }) {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255,255,255,0.08)"
+          stroke={theme.divider}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -177,15 +201,14 @@ function CircularProgress({ percent }: { percent: number }) {
           strokeLinecap="round"
           strokeDasharray={`${circumference}, ${circumference}`}
           strokeDashoffset={dashOffset}
-          rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
       <View style={{ position: "absolute", alignItems: "center" }}>
         <MaterialIcons name="bolt" size={18} color="#3fe0c5" />
         <Text
           className="text-[9px] font-bold mt-0.5"
-          style={{ color: "rgba(245,243,255,0.6)" }}
+          style={{ color: theme.textMuted }}
         >
           {label}
         </Text>
@@ -196,6 +219,7 @@ function CircularProgress({ percent }: { percent: number }) {
 
 export default function StatsScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
   const tasks = useTaskStore((s) => s.tasks);
 
   const [activeTab, setActiveTab] = useState<TabKey>("stats");
@@ -221,12 +245,14 @@ export default function StatsScreen() {
 
   const [rangeStart, rangeEnd] = rangeForPeriod(period, today);
   const periodTasks = useMemo(
-    () => tasks.filter((t) => inRange(t.scheduledDateISO, rangeStart, rangeEnd)),
+    () =>
+      tasks.filter((t) => inRange(t.scheduledDateISO, rangeStart, rangeEnd)),
     [tasks, rangeStart, rangeEnd],
   );
   const doneCount = periodTasks.filter((t) => t.done).length;
   const totalCount = periodTasks.length;
-  const percent = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+  const percent =
+    totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
   const pendingCount = totalCount - doneCount;
 
   const [prevStart, prevEnd] = previousRange(period, today);
@@ -235,7 +261,10 @@ export default function StatsScreen() {
     [tasks, prevStart, prevEnd],
   );
   const prevDone = prevTasks.filter((t) => t.done).length;
-  const prevPercent = prevTasks.length === 0 ? null : Math.round((prevDone / prevTasks.length) * 100);
+  const prevPercent =
+    prevTasks.length === 0
+      ? null
+      : Math.round((prevDone / prevTasks.length) * 100);
   const trendDelta = prevPercent === null ? null : percent - prevPercent;
 
   const completedToday = tasks.filter(
@@ -287,7 +316,7 @@ export default function StatsScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -309,12 +338,12 @@ export default function StatsScreen() {
                 }
                 className="w-10 h-10 rounded-full items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="arrow-back" size={19} color="#f5f3ff" />
+                <MaterialIcons name="arrow-back" size={19} color={theme.text} />
               </TouchableOpacity>
               <View
                 className="w-1.5 h-1.5 rounded-full"
@@ -322,7 +351,7 @@ export default function StatsScreen() {
               />
               <Text
                 className="text-[17px] font-bold"
-                style={{ color: "#f5f3ff" }}
+                style={{ color: theme.text }}
                 numberOfLines={1}
               >
                 Productivity Insights
@@ -333,12 +362,12 @@ export default function StatsScreen() {
               <TouchableOpacity
                 className="w-9 h-9 rounded-full items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="more-vert" size={18} color="#f5f3ff" />
+                <MaterialIcons name="more-vert" size={18} color={theme.text} />
               </TouchableOpacity>
               <View
                 className="w-9 h-9 rounded-full items-center justify-center"
@@ -372,26 +401,23 @@ export default function StatsScreen() {
               <View className="flex-row items-center gap-2 mb-1">
                 <Text
                   className="text-[26px] font-extrabold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Productivity
                 </Text>
                 <View
                   className="px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+                  style={{ backgroundColor: theme.divider }}
                 >
                   <Text
                     className="text-[10.5px] font-semibold"
-                    style={{ color: "rgba(245,243,255,0.55)" }}
+                    style={{ color: theme.textMuted }}
                   >
                     v2.4
                   </Text>
                 </View>
               </View>
-              <Text
-                className="text-[13px]"
-                style={{ color: "rgba(245,243,255,0.5)" }}
-              >
+              <Text className="text-[13px]" style={{ color: theme.textFaint }}>
                 Track your progress and stay consistent
               </Text>
             </View>
@@ -399,15 +425,15 @@ export default function StatsScreen() {
             <View
               className="flex-row items-center gap-1.5 px-3 py-2 rounded-full"
               style={{
-                backgroundColor: "rgba(255,255,255,0.06)",
+                backgroundColor: theme.chipBg,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.12)",
+                borderColor: theme.chipBorder,
               }}
             >
               <MaterialIcons name="calendar-today" size={13} color="#cabeff" />
               <Text
                 className="text-[12.5px] font-semibold"
-                style={{ color: "#f5f3ff" }}
+                style={{ color: theme.text }}
               >
                 {dateLabel}
               </Text>
@@ -418,9 +444,9 @@ export default function StatsScreen() {
           <View
             className="flex-row p-1 rounded-full mb-5"
             style={{
-              backgroundColor: "rgba(255,255,255,0.05)",
+              backgroundColor: theme.chipBg,
               borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.1)",
+              borderColor: theme.chipBorder,
             }}
           >
             {PERIODS.map((p) => {
@@ -450,7 +476,7 @@ export default function StatsScreen() {
                     <View style={{ paddingVertical: 9, alignItems: "center" }}>
                       <Text
                         className="text-[13px] font-medium"
-                        style={{ color: "rgba(245,243,255,0.55)" }}
+                        style={{ color: theme.textMuted }}
                       >
                         {p.label}
                       </Text>
@@ -479,13 +505,13 @@ export default function StatsScreen() {
                 </View>
                 <Text
                   className="text-[38px] font-extrabold mb-1"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   {percent}%
                 </Text>
                 <Text
                   className="text-[13px] mb-3"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   {doneCount} of {totalCount} task{totalCount === 1 ? "" : "s"}{" "}
                   complete
@@ -528,14 +554,8 @@ export default function StatsScreen() {
                 padding: 14,
                 borderColor: "rgba(63,224,197,0.18)",
               }}
+              overlayColor="rgba(63,224,197,0.08)"
             >
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { backgroundColor: "rgba(63,224,197,0.08)" },
-                ]}
-                pointerEvents="none"
-              />
               <View className="flex-row items-center justify-between mb-3">
                 <View
                   className="w-8 h-8 rounded-full items-center justify-center"
@@ -567,13 +587,13 @@ export default function StatsScreen() {
               </View>
               <Text
                 className="text-[26px] font-extrabold mb-0.5"
-                style={{ color: "#f5f3ff" }}
+                style={{ color: theme.text }}
               >
                 {doneCount}
               </Text>
               <Text
                 className="text-[12.5px]"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Completed Tasks
               </Text>
@@ -585,14 +605,8 @@ export default function StatsScreen() {
                 padding: 14,
                 borderColor: "rgba(124,108,246,0.22)",
               }}
+              overlayColor="rgba(124,108,246,0.1)"
             >
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { backgroundColor: "rgba(124,108,246,0.1)" },
-                ]}
-                pointerEvents="none"
-              />
               <View className="flex-row items-center justify-between mb-3">
                 <View
                   className="w-8 h-8 rounded-full items-center justify-center"
@@ -620,13 +634,13 @@ export default function StatsScreen() {
               </View>
               <Text
                 className="text-[26px] font-extrabold mb-0.5"
-                style={{ color: "#f5f3ff" }}
+                style={{ color: theme.text }}
               >
                 {pendingCount}
               </Text>
               <Text
                 className="text-[12.5px]"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Pending Tasks
               </Text>
@@ -639,20 +653,20 @@ export default function StatsScreen() {
               <View>
                 <Text
                   className="text-[16px] font-bold mb-0.5"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Task Completion
                 </Text>
                 <Text
                   className="text-[12px]"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Daily velocity breakdown
                 </Text>
               </View>
               <View
                 className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                style={{ backgroundColor: theme.chipBg }}
               >
                 <View
                   className="w-1.5 h-1.5 rounded-full"
@@ -660,7 +674,7 @@ export default function StatsScreen() {
                 />
                 <Text
                   className="text-[11px] font-medium"
-                  style={{ color: "rgba(245,243,255,0.6)" }}
+                  style={{ color: theme.textMuted }}
                 >
                   Avg: {avgPerDay} / day
                 </Text>
@@ -673,20 +687,35 @@ export default function StatsScreen() {
             >
               {weekCounts.map((count, i) => {
                 const isPeak = i === peakDayIndex && count > 0;
-                const heightPct = count === 0 ? 4 : (count / maxWeekCount) * 100;
+                const BAR_MAX_HEIGHT = 90;
+                const barHeight =
+                  count === 0
+                    ? 4
+                    : Math.max(
+                        4,
+                        Math.round((count / maxWeekCount) * BAR_MAX_HEIGHT),
+                      );
                 return (
-                  <View key={i} style={{ alignItems: "center", flex: 1 }}>
+                  <View
+                    key={i}
+                    style={{
+                      alignItems: "center",
+                      flex: 1,
+                      justifyContent: "flex-end",
+                      height: "100%",
+                    }}
+                  >
                     {isPeak ? (
                       <MaterialIcons
                         name="star"
                         size={12}
-                        color="#f5f3ff"
+                        color={theme.text}
                         style={{ marginBottom: 2 }}
                       />
                     ) : (
                       <Text
                         className="text-[11px] font-semibold mb-1"
-                        style={{ color: "rgba(245,243,255,0.55)" }}
+                        style={{ color: theme.textMuted }}
                       >
                         {count}
                       </Text>
@@ -694,12 +723,12 @@ export default function StatsScreen() {
                     <View
                       style={{
                         width: 18,
-                        height: `${heightPct}%`,
+                        height: barHeight,
                         borderRadius: 9,
                         overflow: "hidden",
                         backgroundColor: isPeak
                           ? undefined
-                          : "rgba(124,108,246,0.35)",
+                          : `${theme.accentPurple}59`,
                       }}
                     >
                       {isPeak && (
@@ -724,10 +753,7 @@ export default function StatsScreen() {
                     textAlign: "center",
                     fontSize: 11,
                     fontWeight: i === peakDayIndex ? "700" : "500",
-                    color:
-                      i === peakDayIndex
-                        ? "#3fe0c5"
-                        : "rgba(245,243,255,0.4)",
+                    color: i === peakDayIndex ? "#3fe0c5" : theme.textFaint,
                   }}
                 >
                   {w}
@@ -743,14 +769,8 @@ export default function StatsScreen() {
               padding: 14,
               borderColor: "rgba(255,107,129,0.2)",
             }}
+            overlayColor="rgba(255,107,129,0.07)"
           >
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: "rgba(255,107,129,0.07)" },
-              ]}
-              pointerEvents="none"
-            />
             <TouchableOpacity className="flex-row items-center gap-3">
               <View
                 className="w-11 h-11 rounded-full items-center justify-center"
@@ -770,7 +790,7 @@ export default function StatsScreen() {
                 <View className="flex-row items-center gap-2 mb-0.5">
                   <Text
                     className="text-[15px] font-bold"
-                    style={{ color: "#f5f3ff" }}
+                    style={{ color: theme.text }}
                   >
                     {streak} Day Streak
                   </Text>
@@ -787,7 +807,7 @@ export default function StatsScreen() {
                 </View>
                 <Text
                   className="text-[12px]"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   {streak === 0
                     ? "Complete a task today to start a streak."
@@ -797,7 +817,7 @@ export default function StatsScreen() {
               <MaterialIcons
                 name="chevron-right"
                 size={18}
-                color="rgba(245,243,255,0.4)"
+                color={theme.textFaint}
               />
             </TouchableOpacity>
           </GlassCard>
@@ -808,14 +828,8 @@ export default function StatsScreen() {
               padding: 14,
               borderColor: "rgba(63,224,197,0.2)",
             }}
+            overlayColor="rgba(63,224,197,0.07)"
           >
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: "rgba(63,224,197,0.07)" },
-              ]}
-              pointerEvents="none"
-            />
             <TouchableOpacity className="flex-row items-center gap-3">
               <View
                 className="w-11 h-11 rounded-full items-center justify-center"
@@ -830,14 +844,14 @@ export default function StatsScreen() {
               <View style={{ flex: 1 }}>
                 <Text
                   className="text-[10.5px] font-bold uppercase tracking-wider mb-0.5"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Your Best Day
                 </Text>
                 <View className="flex-row items-center gap-2 mb-0.5">
                   <Text
                     className="text-[15px] font-bold"
-                    style={{ color: "#f5f3ff" }}
+                    style={{ color: theme.text }}
                   >
                     {bestDay ? bestDay.name : "Not enough data"}
                   </Text>
@@ -852,7 +866,7 @@ export default function StatsScreen() {
                 </View>
                 <Text
                   className="text-[12px]"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   {bestDay
                     ? "Your most productive weekday overall"
@@ -862,7 +876,7 @@ export default function StatsScreen() {
               <MaterialIcons
                 name="chevron-right"
                 size={18}
-                color="rgba(245,243,255,0.4)"
+                color={theme.textFaint}
               />
             </TouchableOpacity>
           </GlassCard>
