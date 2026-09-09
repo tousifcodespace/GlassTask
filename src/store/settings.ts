@@ -3,18 +3,18 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 /**
- * NOTE: themeMode is stored/persisted for the Profile screen's Appearance
- * selector, but nothing in the app actually re-skins based on it yet — the
- * whole UI is currently hardcoded to one dark glass theme. Wiring real
- * theme-switching would mean threading dynamic colors through every screen,
- * which is a separate, much bigger task. Treat this as UI state only for now.
+ * NOTE: themeMode drives the real light/dark palette in
+ * src/constants/app-theme.ts via the useAppTheme() hook — "system" follows
+ * the OS color scheme. As of now Home and Profile (plus the shared
+ * GlassCard/BottomTabBar) read from that hook; other screens still use the
+ * fixed dark palette and are being migrated over incrementally.
  *
- * Similarly, everything under "Notifications" below is UI/preference state
+ * Everything under "Notifications" below is still UI/preference state
  * only — there is no expo-notifications integration yet, so toggling these
  * does not actually schedule or suppress a real push notification. Wiring
  * that up is a separate task once real notification scheduling is added.
  */
-export type ThemeMode = "dark" | "fluid" | "system";
+export type ThemeMode = "dark" | "light" | "system";
 
 export const REMINDER_PRESETS_MIN = [5, 10, 15, 30] as const;
 export const SNOOZE_PRESETS_MIN = [5, 10, 15, 20, 30] as const;
@@ -92,18 +92,25 @@ export const useSettingsStore = create<SettingsStore>()(
       cycleReminderSound: () => {
         const current = get().reminderSound;
         const idx = REMINDER_SOUNDS.indexOf(current);
-        set({ reminderSound: REMINDER_SOUNDS[(idx + 1) % REMINDER_SOUNDS.length] });
+        set({
+          reminderSound: REMINDER_SOUNDS[(idx + 1) % REMINDER_SOUNDS.length],
+        });
       },
 
       toggleNotificationHaptics: () =>
-        set((s) => ({ notificationHapticsEnabled: !s.notificationHapticsEnabled })),
+        set((s) => ({
+          notificationHapticsEnabled: !s.notificationHapticsEnabled,
+        })),
 
       cycleSnoozeMinutes: () => {
         const current = get().snoozeMinutes;
         const idx = SNOOZE_PRESETS_MIN.indexOf(
           current as (typeof SNOOZE_PRESETS_MIN)[number],
         );
-        set({ snoozeMinutes: SNOOZE_PRESETS_MIN[(idx + 1) % SNOOZE_PRESETS_MIN.length] });
+        set({
+          snoozeMinutes:
+            SNOOZE_PRESETS_MIN[(idx + 1) % SNOOZE_PRESETS_MIN.length],
+        });
       },
 
       toggleRepeatMissedReminders: () =>

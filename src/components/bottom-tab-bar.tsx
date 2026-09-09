@@ -4,6 +4,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
+import { useAppTheme } from "@/hooks/use-app-theme";
 
 export type TabKey = "home" | "calendar" | "stats" | "profile";
 
@@ -32,6 +33,7 @@ export function BottomTabBar({
   onPressAdd,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
   const leftTabs = tabs.slice(0, 2);
   const rightTabs = tabs.slice(2);
 
@@ -41,7 +43,7 @@ export function BottomTabBar({
         position: "absolute",
         left: 14,
         right: 14,
-        bottom: insets.bottom + 12,
+        bottom: Math.max(insets.bottom, 8) + 12,
       }}
     >
       <GlassCard radius={28} intensity={45}>
@@ -53,6 +55,7 @@ export function BottomTabBar({
               icon={tab.icon}
               active={active === tab.key}
               onPress={() => onPressTab(tab.key)}
+              theme={theme}
             />
           ))}
 
@@ -66,6 +69,7 @@ export function BottomTabBar({
               icon={tab.icon}
               active={active === tab.key}
               onPress={() => onPressTab(tab.key)}
+              theme={theme}
             />
           ))}
         </View>
@@ -83,7 +87,7 @@ export function BottomTabBar({
         }}
       >
         <LinearGradient
-          colors={["#7c6cf6", "#b57bff"]}
+          colors={[theme.accentPurple, theme.accentPurpleLight]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -93,8 +97,11 @@ export function BottomTabBar({
             alignItems: "center",
             justifyContent: "center",
             borderWidth: 3,
-            borderColor: "rgba(21,15,48,0.9)",
-            shadowColor: "#7c6cf6",
+            borderColor:
+              theme.mode === "light"
+                ? "rgba(248,248,255,0.9)"
+                : "rgba(21,15,48,0.9)",
+            shadowColor: theme.accentPurple,
             shadowOpacity: 0.5,
             shadowRadius: 10,
             shadowOffset: { width: 0, height: 4 },
@@ -113,13 +120,15 @@ function TabItem({
   icon,
   active,
   onPress,
+  theme,
 }: {
   label: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   active: boolean;
   onPress: () => void;
+  theme: ReturnType<typeof useAppTheme>;
 }) {
-  const color = active ? "#ffffff" : "rgba(245,243,255,0.4)";
+  const color = active ? theme.text : theme.textSubtle;
   return (
     <TouchableOpacity onPress={onPress} className="items-center gap-0.5">
       <MaterialIcons name={icon} size={20} color={color} />

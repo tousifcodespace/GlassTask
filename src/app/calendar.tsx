@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomTabBar, TabKey } from "@/components/bottom-tab-bar";
 import { GlassCard } from "@/components/glass-card";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { TAB_ROUTES } from "@/lib/tab-routes";
 import {
   CATEGORY_LABELS,
@@ -45,11 +46,12 @@ const PRIORITY_META: Record<Priority, { label: string; color: string }> = {
   low: { label: "LOW", color: "#3fe0c5" },
 };
 
-const CATEGORY_ICON: Record<CategoryKey, keyof typeof MaterialIcons.glyphMap> = {
-  work: "work",
-  personal: "favorite",
-  health: "fitness-center",
-};
+const CATEGORY_ICON: Record<CategoryKey, keyof typeof MaterialIcons.glyphMap> =
+  {
+    work: "work",
+    personal: "favorite",
+    health: "fitness-center",
+  };
 
 type DayCell = { date: Date; inMonth: boolean };
 
@@ -73,7 +75,11 @@ function buildMonthGrid(viewDate: Date): DayCell[] {
   }
   while (cells.length % 7 !== 0) {
     const last = cells[cells.length - 1].date;
-    const next = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
+    const next = new Date(
+      last.getFullYear(),
+      last.getMonth(),
+      last.getDate() + 1,
+    );
     cells.push({ date: next, inMonth: false });
   }
   return cells;
@@ -89,6 +95,7 @@ function isSameDay(a: Date, b: Date): boolean {
 
 export default function CalendarScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTask = useTaskStore((s) => s.toggleTask);
 
@@ -98,7 +105,9 @@ export default function CalendarScreen() {
 
   const handlePressTab = (key: TabKey) => {
     setActiveTab(key);
-    const route = TAB_ROUTES[key] as Parameters<typeof router.push>[0] | undefined;
+    const route = TAB_ROUTES[key] as
+      | Parameters<typeof router.push>[0]
+      | undefined;
     if (route) router.push(route);
   };
 
@@ -124,10 +133,7 @@ export default function CalendarScreen() {
 
   const monthTaskCount = grid
     .filter((c) => c.inMonth)
-    .reduce(
-      (sum, c) => sum + (tasksByDate[toISODate(c.date)]?.length ?? 0),
-      0,
-    );
+    .reduce((sum, c) => sum + (tasksByDate[toISODate(c.date)]?.length ?? 0), 0);
 
   const goPrevMonth = () =>
     setViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
@@ -143,7 +149,7 @@ export default function CalendarScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -165,16 +171,16 @@ export default function CalendarScreen() {
                 }
                 className="w-10 h-10 rounded-full items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="arrow-back" size={19} color="#f5f3ff" />
+                <MaterialIcons name="arrow-back" size={19} color={theme.text} />
               </TouchableOpacity>
               <Text
                 className="text-[19px] font-bold"
-                style={{ color: "#f5f3ff" }}
+                style={{ color: theme.text }}
               >
                 Calendar
               </Text>
@@ -195,26 +201,26 @@ export default function CalendarScreen() {
               <TouchableOpacity
                 className="w-9 h-9 rounded-full items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="search" size={17} color="#f5f3ff" />
+                <MaterialIcons name="search" size={17} color={theme.text} />
               </TouchableOpacity>
               <View>
                 <TouchableOpacity
                   className="w-9 h-9 rounded-full items-center justify-center"
                   style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
+                    backgroundColor: theme.chipBg,
                     borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.12)",
+                    borderColor: theme.chipBorder,
                   }}
                 >
                   <MaterialIcons
                     name="notifications-none"
                     size={17}
-                    color="#f5f3ff"
+                    color={theme.text}
                   />
                 </TouchableOpacity>
                 <View
@@ -252,7 +258,7 @@ export default function CalendarScreen() {
                 </Text>
                 <Text
                   className="text-[13px] leading-[18px]"
-                  style={{ color: "rgba(245,243,255,0.6)" }}
+                  style={{ color: theme.textMuted }}
                 >
                   Plan your cycles with tactile obsidian precision
                 </Text>
@@ -260,9 +266,9 @@ export default function CalendarScreen() {
               <View
                 className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <View
@@ -271,7 +277,7 @@ export default function CalendarScreen() {
                 />
                 <Text
                   className="text-[12px] font-medium"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Sync Active
                 </Text>
@@ -285,7 +291,7 @@ export default function CalendarScreen() {
               <View className="flex-row items-center justify-between mb-2.5">
                 <Text
                   className="text-[10px] font-bold uppercase tracking-wider"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Focus Flow
                 </Text>
@@ -294,7 +300,7 @@ export default function CalendarScreen() {
               <View className="flex-row items-baseline gap-1.5 mb-2.5">
                 <Text
                   className="text-[22px] font-extrabold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   4.5h
                 </Text>
@@ -309,7 +315,7 @@ export default function CalendarScreen() {
                 style={{
                   height: 5,
                   borderRadius: 3,
-                  backgroundColor: "rgba(255,255,255,0.08)",
+                  backgroundColor: theme.divider,
                   overflow: "hidden",
                 }}
               >
@@ -326,7 +332,7 @@ export default function CalendarScreen() {
               <View className="flex-row items-center justify-between mb-2.5">
                 <Text
                   className="text-[10px] font-bold uppercase tracking-wider"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Schedule
                 </Text>
@@ -335,13 +341,13 @@ export default function CalendarScreen() {
               <View className="flex-row items-baseline gap-1 mb-2.5">
                 <Text
                   className="text-[22px] font-extrabold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   {selectedDoneCount}
                 </Text>
                 <Text
                   className="text-[13px] font-medium"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   {" "}
                   / {selectedDayTasks.length} Tasks
@@ -354,9 +360,7 @@ export default function CalendarScreen() {
                     className="w-1.5 h-1.5 rounded-full"
                     style={{
                       backgroundColor:
-                        i < selectedDoneCount
-                          ? "#7c6cf6"
-                          : "rgba(255,255,255,0.15)",
+                        i < selectedDoneCount ? "#7c6cf6" : theme.chipBorder,
                     }}
                   />
                 ))}
@@ -370,38 +374,38 @@ export default function CalendarScreen() {
               <TouchableOpacity
                 onPress={goPrevMonth}
                 className="w-8 h-8 rounded-full items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                style={{ backgroundColor: theme.chipBg }}
               >
                 <MaterialIcons
                   name="chevron-left"
                   size={18}
-                  color="rgba(245,243,255,0.7)"
+                  color={theme.textMuted}
                 />
               </TouchableOpacity>
 
               <View className="flex-row items-center gap-1.5">
                 <Text
                   className="text-[16px] font-bold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   {MONTH_NAMES[viewDate.getMonth()]} {viewDate.getFullYear()}
                 </Text>
                 <MaterialIcons
                   name="expand-more"
                   size={16}
-                  color="rgba(245,243,255,0.5)"
+                  color={theme.textFaint}
                 />
               </View>
 
               <TouchableOpacity
                 onPress={goNextMonth}
                 className="w-8 h-8 rounded-full items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                style={{ backgroundColor: theme.chipBg }}
               >
                 <MaterialIcons
                   name="chevron-right"
                   size={18}
-                  color="rgba(245,243,255,0.7)"
+                  color={theme.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -413,7 +417,7 @@ export default function CalendarScreen() {
                   style={{
                     width: 34,
                     textAlign: "center",
-                    color: "rgba(245,243,255,0.4)",
+                    color: theme.textFaint,
                     fontSize: 11,
                     fontWeight: "600",
                   }}
@@ -457,16 +461,19 @@ export default function CalendarScreen() {
                           fontSize: 13,
                           fontWeight: selected ? "700" : "500",
                           color: !inMonth
-                            ? "rgba(245,243,255,0.25)"
+                            ? theme.textSubtle
                             : selected
                               ? "#fff"
-                              : "#f5f3ff",
+                              : theme.text,
                         }}
                       >
                         {date.getDate()}
                       </Text>
                     </View>
-                    <View className="flex-row gap-0.5 mt-1" style={{ height: 4 }}>
+                    <View
+                      className="flex-row gap-0.5 mt-1"
+                      style={{ height: 4 }}
+                    >
                       {dayTasks.slice(0, 3).map((t) => (
                         <View
                           key={t.id}
@@ -486,7 +493,7 @@ export default function CalendarScreen() {
               className="flex-row items-center justify-between pt-3.5 mt-1"
               style={{
                 borderTopWidth: 1,
-                borderTopColor: "rgba(255,255,255,0.08)",
+                borderTopColor: theme.divider,
               }}
             >
               <View className="flex-row items-center gap-1.5">
@@ -496,9 +503,10 @@ export default function CalendarScreen() {
                 />
                 <Text
                   className="text-[12px]"
-                  style={{ color: "rgba(245,243,255,0.55)" }}
+                  style={{ color: theme.textMuted }}
                 >
-                  {monthTaskCount} Scheduled Task{monthTaskCount === 1 ? "" : "s"}
+                  {monthTaskCount} Scheduled Task
+                  {monthTaskCount === 1 ? "" : "s"}
                 </Text>
               </View>
               <TouchableOpacity className="flex-row items-center gap-1">
@@ -515,7 +523,10 @@ export default function CalendarScreen() {
 
           {/* Selected day header */}
           <View className="flex-row items-center justify-between mb-4 flex-wrap gap-2">
-            <Text className="text-[18px] font-bold" style={{ color: "#f5f3ff" }}>
+            <Text
+              className="text-[18px] font-bold"
+              style={{ color: theme.text }}
+            >
               {selectedLabel}
             </Text>
             <View className="flex-row items-center gap-2">
@@ -529,22 +540,27 @@ export default function CalendarScreen() {
                     style={{ color: "#3fe0c5" }}
                   >
                     {selectedDayTasks.length} TASK
-                    {selectedDayTasks.length === 1 ? "" : "S"} • {selectedPercent}%
+                    {selectedDayTasks.length === 1 ? "" : "S"} •{" "}
+                    {selectedPercent}%
                   </Text>
                 </View>
               )}
-              <TouchableOpacity className="flex-row items-center gap-1">
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/timeline",
+                    params: { date: selectedISO },
+                  })
+                }
+                className="flex-row items-center gap-1"
+              >
                 <Text
                   className="text-[12.5px] font-semibold"
                   style={{ color: "#b57bff" }}
                 >
                   Timeline
                 </Text>
-                <MaterialIcons
-                  name="arrow-forward"
-                  size={13}
-                  color="#b57bff"
-                />
+                <MaterialIcons name="arrow-forward" size={13} color="#b57bff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -554,19 +570,19 @@ export default function CalendarScreen() {
             <View
               className="items-center justify-center rounded-2xl py-10"
               style={{
-                backgroundColor: "rgba(255,255,255,0.04)",
+                backgroundColor: theme.chipBg,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.08)",
+                borderColor: theme.divider,
               }}
             >
               <MaterialIcons
                 name="event-available"
                 size={26}
-                color="rgba(245,243,255,0.35)"
+                color={theme.textSubtle}
               />
               <Text
                 className="text-[13px] mt-2"
-                style={{ color: "rgba(245,243,255,0.45)" }}
+                style={{ color: theme.textFaint }}
               >
                 Nothing scheduled this day
               </Text>
@@ -600,19 +616,19 @@ export default function CalendarScreen() {
                       <View
                         className="flex-row items-center gap-1 px-2 py-0.5 rounded-full"
                         style={{
-                          backgroundColor: "rgba(255,255,255,0.06)",
+                          backgroundColor: theme.chipBg,
                           borderWidth: 1,
-                          borderColor: "rgba(255,255,255,0.1)",
+                          borderColor: theme.chipBorder,
                         }}
                       >
                         <MaterialIcons
                           name={CATEGORY_ICON[t.category]}
                           size={11}
-                          color="rgba(245,243,255,0.6)"
+                          color={theme.textMuted}
                         />
                         <Text
                           className="text-[10.5px] font-medium"
-                          style={{ color: "rgba(245,243,255,0.6)" }}
+                          style={{ color: theme.textMuted }}
                         >
                           {CATEGORY_LABELS[t.category]}
                         </Text>
@@ -622,11 +638,11 @@ export default function CalendarScreen() {
                         <MaterialIcons
                           name="schedule"
                           size={11}
-                          color="rgba(245,243,255,0.45)"
+                          color={theme.textFaint}
                         />
                         <Text
                           className="text-[10.5px]"
-                          style={{ color: "rgba(245,243,255,0.45)" }}
+                          style={{ color: theme.textFaint }}
                         >
                           {t.scheduledTime}
                         </Text>
@@ -636,7 +652,7 @@ export default function CalendarScreen() {
                     <Text
                       className="text-[15px] font-bold mb-1"
                       style={{
-                        color: t.done ? "rgba(245,243,255,0.4)" : "#f5f3ff",
+                        color: t.done ? theme.textFaint : theme.text,
                         textDecorationLine: t.done ? "line-through" : "none",
                       }}
                     >
@@ -644,7 +660,7 @@ export default function CalendarScreen() {
                     </Text>
                     <Text
                       className="text-[12.5px]"
-                      style={{ color: "rgba(245,243,255,0.45)" }}
+                      style={{ color: theme.textFaint }}
                       numberOfLines={2}
                     >
                       {t.notes.trim() ||
@@ -659,7 +675,7 @@ export default function CalendarScreen() {
                     className="w-6 h-6 rounded-full items-center justify-center"
                     style={{
                       borderWidth: t.done ? 0 : 1.5,
-                      borderColor: "rgba(255,255,255,0.3)",
+                      borderColor: theme.textSubtle,
                       backgroundColor: t.done ? "#7c6cf6" : "transparent",
                     }}
                   >

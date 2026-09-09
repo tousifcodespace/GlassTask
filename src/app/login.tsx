@@ -3,43 +3,45 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
+import { GoogleIcon } from "@/components/google-icon";
+import { useAppTheme } from "@/hooks/use-app-theme";
+import { showAlert } from "@/lib/alert";
 import { useAuthStore } from "@/store/auth";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
   const login = useAuthStore((s) => s.login);
-  const hasAccount = useAuthStore((s) => s.account !== null);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const isLoading = useAuthStore((s) => s.isLoading);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const handleLogin = () => {
-    if (!hasAccount) {
-      Alert.alert(
-        "No account yet",
-        "There's no account on this device yet — create one first.",
-      );
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      showAlert("Missing info", "Enter both email and password.");
       return;
     }
-    const result = login(email, password);
+    const result = await login(email, password);
     if (!result.ok) {
-      Alert.alert("Couldn't log in", result.error);
+      showAlert("Couldn't log in", result.error);
       return;
     }
     router.replace("/");
@@ -48,7 +50,7 @@ export default function LoginScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -85,7 +87,7 @@ export default function LoginScreen() {
               <View className="flex-row">
                 <Text
                   className="text-[28px] font-extrabold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Glass
                 </Text>
@@ -98,7 +100,7 @@ export default function LoginScreen() {
               </View>
               <Text
                 className="text-[13px] mt-1"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Stay focused. Get things done.
               </Text>
@@ -108,16 +110,16 @@ export default function LoginScreen() {
             <GlassCard style={{ padding: 20 }}>
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Email Address
               </Text>
               <View
                 className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl mb-4"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <MaterialIcons name="mail-outline" size={17} color="#cabeff" />
@@ -125,25 +127,25 @@ export default function LoginScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  style={{ flex: 1, color: "#f5f3ff", fontSize: 15 }}
+                  style={{ flex: 1, color: theme.text, fontSize: 15 }}
                 />
               </View>
 
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Password
               </Text>
               <View
                 className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl mb-4"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <MaterialIcons name="lock-outline" size={17} color="#cabeff" />
@@ -151,15 +153,15 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Your password"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   secureTextEntry={!showPassword}
-                  style={{ flex: 1, color: "#f5f3ff", fontSize: 15 }}
+                  style={{ flex: 1, color: theme.text, fontSize: 15 }}
                 />
                 <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
                   <MaterialIcons
                     name={showPassword ? "visibility-off" : "visibility"}
                     size={18}
-                    color="rgba(245,243,255,0.45)"
+                    color={theme.textFaint}
                   />
                 </TouchableOpacity>
               </View>
@@ -169,23 +171,21 @@ export default function LoginScreen() {
                   <Switch
                     value={rememberMe}
                     onValueChange={setRememberMe}
-                    trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                    thumbColor="#f5f3ff"
+                    trackColor={{
+                      false: "rgba(255,255,255,0.15)",
+                      true: "#7c6cf6",
+                    }}
+                    thumbColor={theme.text}
                   />
                   <Text
                     className="text-[13px] font-medium"
-                    style={{ color: "rgba(245,243,255,0.7)" }}
+                    style={{ color: theme.textMuted }}
                   >
                     Remember me
                   </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      "Not wired up yet",
-                      "There's no email delivery for password resets in this local build.",
-                    )
-                  }
+                  onPress={() => router.push("/forgot-password")}
                 >
                   <Text
                     className="text-[13px] font-semibold"
@@ -196,7 +196,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity onPress={handleLogin}>
+              <TouchableOpacity onPress={handleLogin} disabled={isLoading}>
                 <LinearGradient
                   colors={["#7c6cf6", "#22d3ee"]}
                   start={{ x: 0, y: 0 }}
@@ -208,47 +208,60 @@ export default function LoginScreen() {
                     gap: 8,
                     paddingVertical: 15,
                     borderRadius: 100,
+                    opacity: isLoading ? 0.7 : 1,
                   }}
                 >
-                  <MaterialIcons name="login" size={17} color="#150f30" />
-                  <Text
-                    className="text-[15px] font-bold"
-                    style={{ color: "#150f30" }}
-                  >
-                    Log In
-                  </Text>
+                  {isLoading ? (
+                    <ActivityIndicator color="#150f30" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="login" size={17} color="#150f30" />
+                      <Text
+                        className="text-[15px] font-bold"
+                        style={{ color: "#150f30" }}
+                      >
+                        Log In
+                      </Text>
+                    </>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
               <View className="flex-row items-center gap-3 my-5">
-                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.1)" }} />
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: theme.divider }}
+                />
                 <Text
                   className="text-[10.5px] font-semibold"
-                  style={{ color: "rgba(245,243,255,0.35)" }}
+                  style={{ color: theme.textSubtle }}
                 >
                   OR
                 </Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.1)" }} />
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: theme.divider }}
+                />
               </View>
 
               <TouchableOpacity
-                onPress={() =>
-                  Alert.alert(
-                    "Not wired up yet",
-                    "Google sign-in isn't connected in this local build.",
-                  )
-                }
+                onPress={async () => {
+                  const result = await signInWithGoogle();
+                  if (!result.ok) {
+                    showAlert("Couldn't sign in with Google", result.error);
+                  }
+                  // On success, the browser is already navigating to
+                  // Google — there's nothing further to do here.
+                }}
                 className="flex-row items-center justify-center gap-2.5 py-3.5 rounded-2xl"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="g-translate" size={16} color="rgba(245,243,255,0.7)" />
+                <GoogleIcon size={16} />
                 <Text
                   className="text-[14px] font-semibold"
-                  style={{ color: "rgba(245,243,255,0.85)" }}
+                  style={{ color: theme.text }}
                 >
                   Continue with Google
                 </Text>
@@ -261,7 +274,7 @@ export default function LoginScreen() {
             >
               <Text
                 className="text-[13px] text-center"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Don&apos;t have an account?{" "}
                 <Text style={{ color: "#3fe0c5", fontWeight: "700" }}>

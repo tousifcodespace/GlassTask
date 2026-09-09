@@ -4,10 +4,27 @@
 
 :root {
   --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
+    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji,
+    Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
-  --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono,
+    Courier New, monospace;
+  --font-rounded:
+    "SF Pro Rounded", "Hiragino Maru Gothic ProN", Meiryo, "MS PGothic",
+    sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+/*
+ * On web, RN's TextInput renders as a plain <input>/<textarea>, and the
+ * browser draws its own default focus ring (usually a blue rectangle) on
+ * click — that's not part of this app's design and made focused fields
+ * look broken/disabled instead of just focused. The wrapping card/pill
+ * already shows which field is active, so it's safe to drop the browser's
+ * own ring entirely rather than replace it with a custom one.
+ */
+input:focus,
+textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }

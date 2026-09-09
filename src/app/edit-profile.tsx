@@ -1,25 +1,28 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import DateTimePicker, {
-    DateTimePickerEvent,
+  DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AvatarImage } from "@/components/avatar-image";
+import { AvatarPickerModal } from "@/components/avatar-picker-modal";
+import { useAppTheme } from "@/hooks/use-app-theme";
+import { showAlert } from "@/lib/alert";
 import { useProfileStore } from "@/store/profile";
 
 const MONTH_NAMES = [
@@ -52,20 +55,21 @@ function FieldShell({
   label: string;
   children: ReactNode;
 }) {
+  const theme = useAppTheme();
   return (
     <View
       className="rounded-2xl px-4 py-3 mb-3"
       style={{
-        backgroundColor: "rgba(255,255,255,0.05)",
+        backgroundColor: theme.chipBg,
         borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.1)",
+        borderColor: theme.chipBorder,
       }}
     >
       <View className="flex-row items-center gap-1.5 mb-1.5">
-        <MaterialIcons name={icon} size={12} color="rgba(245,243,255,0.5)" />
+        <MaterialIcons name={icon} size={12} color={theme.textFaint} />
         <Text
           className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: "rgba(245,243,255,0.5)" }}
+          style={{ color: theme.textFaint }}
         >
           {label}
         </Text>
@@ -77,6 +81,7 @@ function FieldShell({
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
   const profile = useProfileStore((s) => s.profile);
   const updateProfile = useProfileStore((s) => s.updateProfile);
 
@@ -90,14 +95,15 @@ export default function EditProfileScreen() {
     profile.dateOfBirth ? new Date(profile.dateOfBirth) : null,
   );
   const [showDobPicker, setShowDobPicker] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   const onChangeDob = (event: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === "android") setShowDobPicker(false);
     if (event.type === "set" && selected) setDobDate(selected);
   };
 
-  const handleSave = () => {
-    updateProfile({
+  const handleSave = async () => {
+    const result = await updateProfile({
       fullName: fullName.trim(),
       email: email.trim(),
       phone: phone.trim(),
@@ -105,6 +111,10 @@ export default function EditProfileScreen() {
       bio: bio.trim(),
       dateOfBirth: dobDate ? dobDate.toISOString() : "",
     });
+    if (!result.ok) {
+      showAlert("Couldn't save profile", result.error);
+      return;
+    }
     router.canGoBack() ? router.back() : router.replace("/profile");
   };
 
@@ -115,7 +125,7 @@ export default function EditProfileScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -139,24 +149,24 @@ export default function EditProfileScreen() {
                 onPress={handleDiscard}
                 className="w-10 h-10 rounded-full items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="arrow-back" size={19} color="#f5f3ff" />
+                <MaterialIcons name="arrow-back" size={19} color={theme.text} />
               </TouchableOpacity>
 
               <View style={{ alignItems: "center" }}>
                 <Text
                   className="text-[17px] font-bold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Edit Profile
                 </Text>
                 <Text
                   className="text-[11px]"
-                  style={{ color: "rgba(245,243,255,0.45)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Update your information
                 </Text>
@@ -178,46 +188,60 @@ export default function EditProfileScreen() {
 
             {/* Avatar */}
             <View style={{ alignItems: "center", marginBottom: 10 }}>
-              <View
-                className="w-24 h-24 rounded-full items-center justify-center mb-3"
-                style={{
-                  borderWidth: 2,
-                  borderColor: "#7c6cf6",
-                  backgroundColor: "rgba(124,108,246,0.15)",
-                }}
-              >
-                <MaterialIcons name="person" size={42} color="#cabeff" />
+              <TouchableOpacity onPress={() => setShowAvatarPicker(true)}>
                 <View
-                  className="w-8 h-8 rounded-full items-center justify-center absolute"
                   style={{
-                    bottom: -2,
-                    right: -2,
-                    backgroundColor: "#22d3ee",
+                    width: 96,
+                    height: 96,
+                    borderRadius: 48,
                     borderWidth: 2,
-                    borderColor: "#150f30",
+                    borderColor: theme.accentPurple,
+                    padding: 2,
+                    marginBottom: 12,
                   }}
                 >
-                  <MaterialIcons name="photo-camera" size={14} color="#0a0818" />
+                  <AvatarImage size={88} />
+                  <View
+                    className="w-8 h-8 rounded-full items-center justify-center absolute"
+                    style={{
+                      bottom: -2,
+                      right: -2,
+                      backgroundColor: theme.accentCyan,
+                      borderWidth: 2,
+                      borderColor:
+                        theme.mode === "dark" ? "#150f30" : "#ffffff",
+                    }}
+                  >
+                    <MaterialIcons
+                      name="photo-camera"
+                      size={14}
+                      color="#0a0818"
+                    />
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center gap-1.5"
-                onPress={() =>
-                  Alert.alert(
-                    "Coming soon",
-                    "Photo upload isn't wired up yet — this is a placeholder for now.",
-                  )
-                }
+                onPress={() => setShowAvatarPicker(true)}
               >
-                <MaterialIcons name="auto-awesome" size={13} color="#b57bff" />
+                <MaterialIcons
+                  name="auto-awesome"
+                  size={13}
+                  color={theme.accentPurpleLight}
+                />
                 <Text
                   className="text-[13px] font-semibold"
-                  style={{ color: "#b57bff" }}
+                  style={{ color: theme.accentPurpleLight }}
                 >
                   Change Photo
                 </Text>
               </TouchableOpacity>
             </View>
+
+            <AvatarPickerModal
+              visible={showAvatarPicker}
+              onClose={() => setShowAvatarPicker(false)}
+            />
 
             {/* Form */}
             <View style={{ marginTop: 12 }}>
@@ -226,8 +250,8 @@ export default function EditProfileScreen() {
                   value={fullName}
                   onChangeText={setFullName}
                   placeholder="Your name"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
-                  style={{ color: "#f5f3ff", fontSize: 15, fontWeight: "600" }}
+                  placeholderTextColor={theme.textSubtle}
+                  style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}
                 />
               </FieldShell>
 
@@ -236,10 +260,10 @@ export default function EditProfileScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  style={{ color: "#f5f3ff", fontSize: 15, fontWeight: "600" }}
+                  style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}
                 />
               </FieldShell>
 
@@ -248,9 +272,9 @@ export default function EditProfileScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   placeholder="+880 1XXX XXXXXX"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   keyboardType="phone-pad"
-                  style={{ color: "#f5f3ff", fontSize: 15, fontWeight: "600" }}
+                  style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}
                 />
               </FieldShell>
 
@@ -261,7 +285,7 @@ export default function EditProfileScreen() {
                 >
                   <Text
                     style={{
-                      color: dobDate ? "#f5f3ff" : "rgba(245,243,255,0.3)",
+                      color: dobDate ? theme.text : theme.textSubtle,
                       fontSize: 15,
                       fontWeight: "600",
                     }}
@@ -271,7 +295,7 @@ export default function EditProfileScreen() {
                   <MaterialIcons
                     name="unfold-more"
                     size={16}
-                    color="rgba(245,243,255,0.4)"
+                    color={theme.textFaint}
                   />
                 </TouchableOpacity>
               </FieldShell>
@@ -281,8 +305,8 @@ export default function EditProfileScreen() {
                   value={location}
                   onChangeText={setLocation}
                   placeholder="City, Country"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
-                  style={{ color: "#f5f3ff", fontSize: 15, fontWeight: "600" }}
+                  placeholderTextColor={theme.textSubtle}
+                  style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}
                 />
               </FieldShell>
 
@@ -291,11 +315,11 @@ export default function EditProfileScreen() {
                   value={bio}
                   onChangeText={(t) => setBio(t.slice(0, BIO_MAX_LENGTH))}
                   placeholder="A short line about you"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   multiline
                   maxLength={BIO_MAX_LENGTH}
                   style={{
-                    color: "#f5f3ff",
+                    color: theme.text,
                     fontSize: 14,
                     lineHeight: 20,
                     minHeight: 44,
@@ -304,17 +328,21 @@ export default function EditProfileScreen() {
                 />
                 <View className="flex-row items-center justify-between mt-2">
                   <View className="flex-row items-center gap-1">
-                    <MaterialIcons name="code" size={11} color="rgba(245,243,255,0.3)" />
+                    <MaterialIcons
+                      name="code"
+                      size={11}
+                      color={theme.textSubtle}
+                    />
                     <Text
                       className="text-[10.5px]"
-                      style={{ color: "rgba(245,243,255,0.3)" }}
+                      style={{ color: theme.textSubtle }}
                     >
                       Markdown supported
                     </Text>
                   </View>
                   <Text
                     className="text-[10.5px] font-semibold"
-                    style={{ color: "rgba(245,243,255,0.4)" }}
+                    style={{ color: theme.textFaint }}
                   >
                     {bio.length} / {BIO_MAX_LENGTH}
                   </Text>
@@ -350,7 +378,7 @@ export default function EditProfileScreen() {
             <TouchableOpacity onPress={handleDiscard} style={{ marginTop: 14 }}>
               <Text
                 className="text-[13px] font-medium text-center"
-                style={{ color: "rgba(245,243,255,0.4)" }}
+                style={{ color: theme.textFaint }}
               >
                 Discard Changes
               </Text>
@@ -371,7 +399,8 @@ export default function EditProfileScreen() {
             >
               <View
                 style={{
-                  backgroundColor: "#1a1438",
+                  backgroundColor:
+                    theme.mode === "dark" ? "#1a1438" : "#ffffff",
                   borderTopLeftRadius: 20,
                   borderTopRightRadius: 20,
                   paddingBottom: 24,
@@ -380,7 +409,7 @@ export default function EditProfileScreen() {
                 <View className="flex-row items-center justify-between px-5 py-3">
                   <Text
                     className="text-[13px] font-semibold"
-                    style={{ color: "rgba(245,243,255,0.6)" }}
+                    style={{ color: theme.textMuted }}
                   >
                     Date of Birth
                   </Text>
@@ -397,7 +426,7 @@ export default function EditProfileScreen() {
                   value={dobDate ?? new Date(2000, 0, 1)}
                   mode="date"
                   display="inline"
-                  themeVariant="dark"
+                  themeVariant={theme.mode === "dark" ? "dark" : "light"}
                   maximumDate={new Date()}
                   onChange={onChangeDob}
                 />

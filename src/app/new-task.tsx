@@ -3,7 +3,7 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Modal,
@@ -19,10 +19,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
 import { ScreenHeader } from "@/components/screen-header";
+import { useAppTheme } from "@/hooks/use-app-theme";
+import {
+  cancelScheduledNotification,
+  scheduleTaskReminder,
+} from "@/lib/notifications";
 import { useSettingsStore } from "@/store/settings";
 import {
   formatClockTime,
   formatDateLabel,
+  parseScheduledDateTime,
+  RepeatCadence,
   toISODate,
   useTaskStore,
 } from "@/store/tasks";
@@ -40,38 +47,87 @@ const CATEGORIES: {
   { key: "health", label: "Health", icon: "monitor-heart" },
 ];
 
-const PRIORITIES: {
+const getPriorities = (
+  theme: ReturnType<typeof useAppTheme>,
+): {
   key: PriorityKey;
   label: string;
   sub: string;
   color: string;
-}[] = [
-  { key: "high", label: "High", sub: "Critical", color: "#ff6b81" },
-  { key: "medium", label: "Medium", sub: "Routine", color: "#ffb84d" },
-  { key: "low", label: "Low", sub: "Whenever", color: "#3fe0c5" },
+}[] => [
+  { key: "high", label: "High", sub: "Critical", color: theme.accentRed },
+  { key: "medium", label: "Medium", sub: "Routine", color: theme.accentOrange },
+  { key: "low", label: "Low", sub: "Whenever", color: theme.accentTeal },
 ];
+
+const REPEAT_OPTIONS: { key: RepeatCadence; label: string }[] = [
+  { key: "none", label: "Never" },
+  { key: "daily", label: "Daily" },
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+];
+
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
+const REMINDER_PRESETS = [0, 5, 10, 15, 30, 60];
+
+function formatDuration(min: number): string {
+  if (min < 60) return `${min}m`;
+  return `${min / 60}h`;
+}
 
 type Subtask = { id: string; text: string; done: boolean };
 
 export default function NewTaskScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const { taskId } = useLocalSearchParams<{ taskId?: string }>();
+  const isEditing = !!taskId;
   const addTask = useTaskStore((s) => s.addTask);
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const setNotificationId = useTaskStore((s) => s.setNotificationId);
   const reminderOffsetMinutes = useSettingsStore(
     (s) => s.reminderOffsetMinutes,
   );
 
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [category, setCategory] = useState<CategoryKey>("work");
-  const [priority, setPriority] = useState<PriorityKey>("high");
-  const [subtasks, setSubtasks] = useState<Subtask[]>([
-    { id: "1", text: "Outline scope and critical deliverables", done: false },
-    { id: "2", text: "Sync design tokens with front-end team", done: false },
-  ]);
-  const [scheduledDate, setScheduledDate] = useState(new Date());
-  const [scheduledTime, setScheduledTime] = useState(new Date());
+  const existingTask = isEditing
+    ? (useTaskStore.getState().tasks.find((t) => t.id === taskId) ?? null)
+    : null;
+
+  const [title, setTitle] = useState(existingTask?.title ?? "");
+  const [notes, setNotes] = useState(existingTask?.notes ?? "");
+  const [category, setCategory] = useState<CategoryKey>(
+    existingTask?.category ?? "work",
+  );
+  const [priority, setPriority] = useState<PriorityKey>(
+    existingTask?.priority ?? "high",
+  );
+  const [subtasks, setSubtasks] = useState<Subtask[]>(
+    existingTask?.subtasks ?? [
+      { id: "1", text: "Outline scope and critical deliverables", done: false },
+      { id: "2", text: "Sync design tokens with front-end team", done: false },
+    ],
+  );
+  const [scheduledDate, setScheduledDate] = useState(() =>
+    existingTask ? parseScheduledDateTime(existingTask) : new Date(),
+  );
+  const [scheduledTime, setScheduledTime] = useState(() =>
+    existingTask ? parseScheduledDateTime(existingTask) : new Date(),
+  );
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatCadence>(
+    existingTask?.repeat ?? "none",
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    existingTask?.durationMinutes ?? 30,
+  );
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState(
+    existingTask?.reminderMinutesBefore ?? reminderOffsetMinutes,
+  );
+  const [isCustomDuration, setIsCustomDuration] = useState(false);
+  const [customDurationText, setCustomDurationText] = useState("");
+  const [link, setLink] = useState(existingTask?.link ?? "");
+  const PRIORITIES = getPriorities(theme);
 
   const toggleSubtask = (id: string) =>
     setSubtasks((prev) =>
@@ -97,10 +153,10 @@ export default function NewTaskScreen() {
     if (event.type === "set" && selected) setScheduledTime(selected);
   };
 
-  const handleCreate = () => {
+  const handleSave = async () => {
     if (title.trim().length === 0) return;
 
-    addTask({
+    const taskInput = {
       title: title.trim(),
       notes: notes.trim(),
       category,
@@ -109,7 +165,29 @@ export default function NewTaskScreen() {
       scheduledDate: formatDateLabel(scheduledDate),
       scheduledDateISO: toISODate(scheduledDate),
       scheduledTime: formatClockTime(scheduledTime),
-    });
+      durationMinutes,
+      reminderMinutesBefore,
+      repeat,
+      link: link.trim(),
+    };
+
+    let id: string;
+    if (isEditing && existingTask) {
+      id = existingTask.id;
+      updateTask(id, taskInput);
+      await cancelScheduledNotification(existingTask.notificationId);
+    } else {
+      id = addTask(taskInput);
+    }
+
+    const savedTask = useTaskStore.getState().tasks.find((t) => t.id === id);
+    if (savedTask) {
+      const notificationId = await scheduleTaskReminder(
+        savedTask,
+        reminderMinutesBefore,
+      );
+      setNotificationId(id, notificationId);
+    }
 
     router.canGoBack() ? router.back() : router.replace("/");
   };
@@ -117,7 +195,7 @@ export default function NewTaskScreen() {
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -131,7 +209,7 @@ export default function NewTaskScreen() {
           showsVerticalScrollIndicator={false}
         >
           <ScreenHeader
-            title="New Task"
+            title={isEditing ? "Edit Task" : "New Task"}
             subtitle="BENTO CANVAS"
             rightSlot={
               <View className="flex-row items-center gap-2">
@@ -160,14 +238,18 @@ export default function NewTaskScreen() {
                   className="w-9 h-9 rounded-full items-center justify-center"
                   style={{
                     borderWidth: 1.5,
-                    borderColor: "rgba(124,108,246,0.5)",
+                    borderColor: `${theme.accentPurple}80`,
                   }}
                 >
                   <View
                     className="w-full h-full rounded-full items-center justify-center"
-                    style={{ backgroundColor: "rgba(124,108,246,0.25)" }}
+                    style={{ backgroundColor: `${theme.accentPurple}40` }}
                   >
-                    <MaterialIcons name="person" size={16} color="#cabeff" />
+                    <MaterialIcons
+                      name="person"
+                      size={16}
+                      color={theme.accentPurpleLight}
+                    />
                   </View>
                 </View>
               </View>
@@ -179,39 +261,43 @@ export default function NewTaskScreen() {
             <View className="flex-row items-center gap-3">
               <View
                 className="w-11 h-11 rounded-full items-center justify-center"
-                style={{ backgroundColor: "rgba(63,224,197,0.16)" }}
+                style={{ backgroundColor: `${theme.accentTeal}29` }}
               >
-                <MaterialIcons name="water-drop" size={19} color="#3fe0c5" />
+                <MaterialIcons
+                  name="water-drop"
+                  size={19}
+                  color={theme.accentTeal}
+                />
               </View>
               <View className="flex-1">
                 <Text
                   className="text-[10px] font-bold uppercase tracking-wider mb-0.5"
-                  style={{ color: "#3fe0c5" }}
+                  style={{ color: theme.accentTeal }}
                 >
                   Flow State
                 </Text>
                 <Text
                   className="text-[15px] font-bold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
-                  Sculpt New Objective
+                  {isEditing ? "Refine Objective" : "Sculpt New Objective"}
                 </Text>
               </View>
               <View
                 className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.08)",
+                  backgroundColor: theme.divider,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.14)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <View
                   className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: "#3fe0c5" }}
+                  style={{ backgroundColor: theme.accentTeal }}
                 />
                 <Text
                   className="text-[11px] font-medium"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Live Draft
                 </Text>
@@ -224,14 +310,11 @@ export default function NewTaskScreen() {
             <View className="flex-row items-center justify-between mb-2.5">
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Task Title
               </Text>
-              <Text
-                className="text-[11px]"
-                style={{ color: "rgba(245,243,255,0.4)" }}
-              >
+              <Text className="text-[11px]" style={{ color: theme.textFaint }}>
                 {title.length}/80
               </Text>
             </View>
@@ -239,12 +322,12 @@ export default function NewTaskScreen() {
               value={title}
               onChangeText={(t) => setTitle(t.slice(0, 80))}
               placeholder="What do you need to do?"
-              placeholderTextColor="rgba(245,243,255,0.35)"
+              placeholderTextColor={theme.textSubtle}
               className="text-[15px]"
               style={{
-                color: "#f5f3ff",
+                color: theme.text,
                 borderWidth: 1.5,
-                borderColor: "rgba(124,108,246,0.6)",
+                borderColor: `${theme.accentPurple}99`,
                 borderRadius: 12,
                 paddingHorizontal: 14,
                 paddingVertical: 12,
@@ -255,14 +338,14 @@ export default function NewTaskScreen() {
               className="flex-row items-center justify-between pt-2.5"
               style={{
                 borderTopWidth: 1,
-                borderTopColor: "rgba(255,255,255,0.08)",
+                borderTopColor: theme.divider,
               }}
             >
               <View className="flex-row items-center gap-1.5">
                 <MaterialIcons name="auto-awesome" size={13} color="#b57bff" />
                 <Text
                   className="text-[11.5px] font-medium"
-                  style={{ color: "#cabeff" }}
+                  style={{ color: theme.accentPurpleLight }}
                 >
                   Auto-detects date, time &amp; tags
                 </Text>
@@ -270,14 +353,14 @@ export default function NewTaskScreen() {
               <View
                 className="px-2 py-0.5 rounded-md"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.12)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <Text
                   className="text-[10.5px]"
-                  style={{ color: "rgba(245,243,255,0.5)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   ↵ Enter
                 </Text>
@@ -289,7 +372,7 @@ export default function NewTaskScreen() {
           <View className="flex-row items-center justify-between mb-2.5">
             <Text
               className="text-[10.5px] font-bold uppercase tracking-wider"
-              style={{ color: "rgba(245,243,255,0.5)" }}
+              style={{ color: theme.textFaint }}
             >
               Category Space
             </Text>
@@ -316,40 +399,44 @@ export default function NewTaskScreen() {
                     <View
                       className="flex-row items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl"
                       style={{
-                        backgroundColor: "rgba(124,108,246,0.28)",
+                        backgroundColor: `${theme.accentPurple}47`,
                         borderWidth: 1,
-                        borderColor: "rgba(124,108,246,0.5)",
+                        borderColor: `${theme.accentPurple}80`,
                       }}
                     >
-                      <MaterialIcons name={c.icon} size={15} color="#f5f3ff" />
+                      <MaterialIcons
+                        name={c.icon}
+                        size={15}
+                        color={theme.text}
+                      />
                       <Text
                         className="text-[13px] font-semibold"
-                        style={{ color: "#f5f3ff" }}
+                        style={{ color: theme.text }}
                       >
                         {c.label}
                       </Text>
                       <View
                         className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: "#3fe0c5" }}
+                        style={{ backgroundColor: theme.accentTeal }}
                       />
                     </View>
                   ) : (
                     <View
                       className="flex-row items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl"
                       style={{
-                        backgroundColor: "rgba(255,255,255,0.05)",
+                        backgroundColor: theme.chipBg,
                         borderWidth: 1,
-                        borderColor: "rgba(255,255,255,0.1)",
+                        borderColor: theme.chipBorder,
                       }}
                     >
                       <MaterialIcons
                         name={c.icon}
                         size={15}
-                        color="rgba(245,243,255,0.55)"
+                        color={theme.textMuted}
                       />
                       <Text
                         className="text-[13px] font-medium"
-                        style={{ color: "rgba(245,243,255,0.55)" }}
+                        style={{ color: theme.textMuted }}
                       >
                         {c.label}
                       </Text>
@@ -370,25 +457,25 @@ export default function NewTaskScreen() {
                 <View className="flex-row items-center justify-between mb-3">
                   <View
                     className="w-8 h-8 rounded-full items-center justify-center"
-                    style={{ backgroundColor: "rgba(124,108,246,0.2)" }}
+                    style={{ backgroundColor: `${theme.accentPurple}33` }}
                   >
                     <MaterialIcons
                       name="calendar-today"
                       size={14}
-                      color="#cabeff"
+                      color={theme.accentPurpleLight}
                     />
                   </View>
                   <View
                     className="px-2 py-0.5 rounded-full"
                     style={{
-                      backgroundColor: "rgba(255,255,255,0.06)",
+                      backgroundColor: theme.chipBg,
                       borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.12)",
+                      borderColor: theme.chipBorder,
                     }}
                   >
                     <Text
                       className="text-[10px] font-medium"
-                      style={{ color: "rgba(245,243,255,0.6)" }}
+                      style={{ color: theme.textMuted }}
                     >
                       Due
                     </Text>
@@ -396,13 +483,13 @@ export default function NewTaskScreen() {
                 </View>
                 <Text
                   className="text-[10px] font-bold uppercase tracking-wider mb-1"
-                  style={{ color: "rgba(245,243,255,0.4)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Scheduled Date
                 </Text>
                 <Text
                   className="text-[15px] font-bold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   {formatDateLabel(scheduledDate)}
                 </Text>
@@ -417,35 +504,50 @@ export default function NewTaskScreen() {
                 <View className="flex-row items-center justify-between mb-3">
                   <View
                     className="w-8 h-8 rounded-full items-center justify-center"
-                    style={{ backgroundColor: "rgba(124,108,246,0.2)" }}
+                    style={{ backgroundColor: `${theme.accentPurple}33` }}
                   >
-                    <MaterialIcons name="schedule" size={14} color="#cabeff" />
+                    <MaterialIcons
+                      name="schedule"
+                      size={14}
+                      color={theme.accentPurpleLight}
+                    />
                   </View>
-                  <View
+                  <TouchableOpacity
+                    onPress={() =>
+                      setReminderMinutesBefore(
+                        REMINDER_PRESETS[
+                          (REMINDER_PRESETS.indexOf(reminderMinutesBefore) +
+                            1) %
+                            REMINDER_PRESETS.length
+                        ],
+                      )
+                    }
                     className="px-2 py-0.5 rounded-full"
                     style={{
-                      backgroundColor: "rgba(255,255,255,0.06)",
+                      backgroundColor: `${theme.accentPurple}38`,
                       borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.12)",
+                      borderColor: `${theme.accentPurple}66`,
                     }}
                   >
                     <Text
-                      className="text-[10px] font-medium"
-                      style={{ color: "rgba(245,243,255,0.6)" }}
+                      className="text-[10px] font-semibold"
+                      style={{ color: theme.accentPurpleLight }}
                     >
-                      {reminderOffsetMinutes}m before
+                      {reminderMinutesBefore === 0
+                        ? "At time"
+                        : `${reminderMinutesBefore}m before`}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
                 <Text
                   className="text-[10px] font-bold uppercase tracking-wider mb-1"
-                  style={{ color: "rgba(245,243,255,0.4)" }}
+                  style={{ color: theme.textFaint }}
                 >
                   Time &amp; Reminder
                 </Text>
                 <Text
                   className="text-[15px] font-bold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   {formatClockTime(scheduledTime)}
                 </Text>
@@ -465,7 +567,8 @@ export default function NewTaskScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: "#1a1438",
+                      backgroundColor:
+                        theme.mode === "dark" ? "#1a1438" : "#ffffff",
                       borderTopLeftRadius: 20,
                       borderTopRightRadius: 20,
                       paddingBottom: 24,
@@ -474,11 +577,13 @@ export default function NewTaskScreen() {
                     <View className="flex-row items-center justify-between px-5 py-3">
                       <Text
                         className="text-[13px] font-semibold"
-                        style={{ color: "rgba(245,243,255,0.6)" }}
+                        style={{ color: theme.textMuted }}
                       >
                         Scheduled Date
                       </Text>
-                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <TouchableOpacity
+                        onPress={() => setShowDatePicker(false)}
+                      >
                         <Text
                           className="text-[13px] font-bold"
                           style={{ color: "#b57bff" }}
@@ -491,7 +596,7 @@ export default function NewTaskScreen() {
                       value={scheduledDate}
                       mode="date"
                       display="inline"
-                      themeVariant="dark"
+                      themeVariant={theme.mode === "dark" ? "dark" : "light"}
                       onChange={onChangeDate}
                     />
                   </View>
@@ -518,7 +623,8 @@ export default function NewTaskScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: "#1a1438",
+                      backgroundColor:
+                        theme.mode === "dark" ? "#1a1438" : "#ffffff",
                       borderTopLeftRadius: 20,
                       borderTopRightRadius: 20,
                       paddingBottom: 24,
@@ -527,11 +633,13 @@ export default function NewTaskScreen() {
                     <View className="flex-row items-center justify-between px-5 py-3">
                       <Text
                         className="text-[13px] font-semibold"
-                        style={{ color: "rgba(245,243,255,0.6)" }}
+                        style={{ color: theme.textMuted }}
                       >
                         Time &amp; Reminder
                       </Text>
-                      <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                      <TouchableOpacity
+                        onPress={() => setShowTimePicker(false)}
+                      >
                         <Text
                           className="text-[13px] font-bold"
                           style={{ color: "#b57bff" }}
@@ -544,7 +652,7 @@ export default function NewTaskScreen() {
                       value={scheduledTime}
                       mode="time"
                       display="spinner"
-                      themeVariant="dark"
+                      themeVariant={theme.mode === "dark" ? "dark" : "light"}
                       onChange={onChangeTime}
                     />
                   </View>
@@ -560,53 +668,168 @@ export default function NewTaskScreen() {
             ))}
 
           {/* Recurrence */}
-          <TouchableOpacity>
-            <GlassCard style={{ marginBottom: 16, padding: 14 }}>
-              <View className="flex-row items-center gap-3">
+          <View className="flex-row items-center justify-between mb-2.5">
+            <Text
+              className="text-[10.5px] font-bold uppercase tracking-wider"
+              style={{ color: theme.textFaint }}
+            >
+              Recurrence Cadence
+            </Text>
+          </View>
+          <View className="flex-row gap-2 mb-4">
+            {REPEAT_OPTIONS.map((r) => {
+              const active = r.key === repeat;
+              return (
+                <TouchableOpacity
+                  key={r.key}
+                  onPress={() => setRepeat(r.key)}
+                  style={{ flex: 1 }}
+                >
+                  <View
+                    className="items-center py-2.5 rounded-2xl"
+                    style={{
+                      backgroundColor: active
+                        ? `${theme.accentPurple}47`
+                        : theme.chipBg,
+                      borderWidth: 1,
+                      borderColor: active
+                        ? `${theme.accentPurple}80`
+                        : theme.chipBorder,
+                    }}
+                  >
+                    <Text
+                      className="text-[12.5px] font-semibold"
+                      style={{ color: active ? theme.text : theme.textMuted }}
+                    >
+                      {r.label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Duration */}
+          <View className="flex-row items-center justify-between mb-2.5">
+            <Text
+              className="text-[10.5px] font-bold uppercase tracking-wider"
+              style={{ color: theme.textFaint }}
+            >
+              Estimated Duration
+            </Text>
+            <Text className="text-[11px]" style={{ color: theme.textFaint }}>
+              Powers the in-app focus timer
+            </Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: isCustomDuration ? 10 : 16 }}
+          >
+            <View className="flex-row gap-2">
+              {DURATION_OPTIONS.map((min) => {
+                const active = !isCustomDuration && min === durationMinutes;
+                return (
+                  <TouchableOpacity
+                    key={min}
+                    onPress={() => {
+                      setIsCustomDuration(false);
+                      setDurationMinutes(min);
+                    }}
+                  >
+                    <View
+                      className="px-4 py-2 rounded-full"
+                      style={{
+                        backgroundColor: active
+                          ? `${theme.accentPurple}47`
+                          : theme.chipBg,
+                        borderWidth: 1,
+                        borderColor: active
+                          ? `${theme.accentPurple}80`
+                          : theme.chipBorder,
+                      }}
+                    >
+                      <Text
+                        className="text-[12.5px] font-semibold"
+                        style={{ color: active ? theme.text : theme.textMuted }}
+                      >
+                        {formatDuration(min)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity onPress={() => setIsCustomDuration(true)}>
                 <View
-                  className="w-9 h-9 rounded-full items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                  className="flex-row items-center gap-1 px-4 py-2 rounded-full"
+                  style={{
+                    backgroundColor: isCustomDuration
+                      ? `${theme.accentPurple}47`
+                      : theme.chipBg,
+                    borderWidth: 1,
+                    borderColor: isCustomDuration
+                      ? `${theme.accentPurple}80`
+                      : theme.chipBorder,
+                  }}
                 >
                   <MaterialIcons
-                    name="repeat"
-                    size={16}
-                    color="rgba(245,243,255,0.6)"
+                    name="edit"
+                    size={13}
+                    color={isCustomDuration ? theme.text : theme.textMuted}
                   />
-                </View>
-                <View className="flex-1">
                   <Text
-                    className="text-[10px] font-bold uppercase tracking-wider mb-0.5"
-                    style={{ color: "rgba(245,243,255,0.4)" }}
+                    className="text-[12.5px] font-semibold"
+                    style={{
+                      color: isCustomDuration ? theme.text : theme.textMuted,
+                    }}
                   >
-                    Recurrence Cadence
-                  </Text>
-                  <Text
-                    className="text-[14.5px] font-bold"
-                    style={{ color: "#f5f3ff" }}
-                  >
-                    Does not repeat
+                    Custom
                   </Text>
                 </View>
-                <MaterialIcons
-                  name="chevron-right"
-                  size={20}
-                  color="rgba(245,243,255,0.4)"
-                />
-              </View>
-            </GlassCard>
-          </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {isCustomDuration && (
+            <View className="flex-row items-center gap-2 mb-4">
+              <TextInput
+                value={customDurationText}
+                onChangeText={(t) => {
+                  const digits = t.replace(/[^0-9]/g, "").slice(0, 3);
+                  setCustomDurationText(digits);
+                  const n = parseInt(digits, 10);
+                  if (!Number.isNaN(n) && n > 0) setDurationMinutes(n);
+                }}
+                keyboardType="number-pad"
+                placeholder="e.g. 25"
+                placeholderTextColor={theme.textSubtle}
+                style={{
+                  color: theme.text,
+                  borderWidth: 1.5,
+                  borderColor: `${theme.accentPurple}99`,
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  width: 90,
+                }}
+              />
+              <Text className="text-[12px]" style={{ color: theme.textFaint }}>
+                minutes
+              </Text>
+            </View>
+          )}
 
           {/* Priority Matrix */}
           <View className="flex-row items-center justify-between mb-2.5">
             <Text
               className="text-[10.5px] font-bold uppercase tracking-wider"
-              style={{ color: "rgba(245,243,255,0.5)" }}
+              style={{ color: theme.textFaint }}
             >
               Priority Matrix
             </Text>
             <Text
               className="text-[11px] font-semibold"
-              style={{ color: "#ff6b81" }}
+              style={{ color: theme.accentRed }}
             >
               Urgent &amp; Important
             </Text>
@@ -623,11 +846,9 @@ export default function NewTaskScreen() {
                   <View
                     className="items-center py-3 rounded-2xl"
                     style={{
-                      backgroundColor: active
-                        ? `${p.color}22`
-                        : "rgba(255,255,255,0.05)",
+                      backgroundColor: active ? `${p.color}22` : theme.chipBg,
                       borderWidth: 1.5,
-                      borderColor: active ? p.color : "rgba(255,255,255,0.1)",
+                      borderColor: active ? p.color : theme.chipBorder,
                     }}
                   >
                     <View className="flex-row items-center gap-1.5 mb-1">
@@ -637,14 +858,14 @@ export default function NewTaskScreen() {
                       />
                       <Text
                         className="text-[13px] font-bold"
-                        style={{ color: active ? p.color : "#f5f3ff" }}
+                        style={{ color: active ? p.color : theme.text }}
                       >
                         {p.label}
                       </Text>
                     </View>
                     <Text
                       className="text-[10.5px]"
-                      style={{ color: "rgba(245,243,255,0.45)" }}
+                      style={{ color: theme.textFaint }}
                     >
                       {p.sub}
                     </Text>
@@ -658,7 +879,7 @@ export default function NewTaskScreen() {
           <View className="flex-row items-center justify-between mb-2.5">
             <Text
               className="text-[10.5px] font-bold uppercase tracking-wider"
-              style={{ color: "rgba(245,243,255,0.5)" }}
+              style={{ color: theme.textFaint }}
             >
               Subtasks &amp; Milestones
             </Text>
@@ -688,10 +909,10 @@ export default function NewTaskScreen() {
                     className="w-5 h-5 rounded-full items-center justify-center"
                     style={{
                       borderWidth: 1.5,
-                      borderColor: s.done
-                        ? "transparent"
-                        : "rgba(255,255,255,0.3)",
-                      backgroundColor: s.done ? "#7c6cf6" : "transparent",
+                      borderColor: s.done ? "transparent" : theme.textSubtle,
+                      backgroundColor: s.done
+                        ? theme.accentPurple
+                        : "transparent",
                     }}
                   >
                     {s.done && (
@@ -701,7 +922,7 @@ export default function NewTaskScreen() {
                   <Text
                     className="flex-1 text-[13.5px]"
                     style={{
-                      color: s.done ? "rgba(245,243,255,0.4)" : "#f5f3ff",
+                      color: s.done ? theme.textFaint : theme.text,
                       textDecorationLine: s.done ? "line-through" : "none",
                     }}
                   >
@@ -711,7 +932,7 @@ export default function NewTaskScreen() {
                     <MaterialIcons
                       name="close"
                       size={16}
-                      color="rgba(245,243,255,0.4)"
+                      color={theme.textFaint}
                     />
                   </TouchableOpacity>
                 </View>
@@ -724,29 +945,29 @@ export default function NewTaskScreen() {
             <View className="flex-row items-center justify-between mb-2.5">
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Context &amp; Notes
               </Text>
               <View className="flex-row items-center gap-2">
                 <TouchableOpacity
                   className="w-7 h-7 rounded-full items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                  style={{ backgroundColor: theme.chipBg }}
                 >
                   <MaterialIcons
                     name="attach-file"
                     size={14}
-                    color="rgba(245,243,255,0.55)"
+                    color={theme.textMuted}
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="w-7 h-7 rounded-full items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                  style={{ backgroundColor: theme.chipBg }}
                 >
                   <MaterialIcons
                     name="mic-none"
                     size={14}
-                    color="rgba(245,243,255,0.55)"
+                    color={theme.textMuted}
                   />
                 </TouchableOpacity>
               </View>
@@ -755,14 +976,14 @@ export default function NewTaskScreen() {
               value={notes}
               onChangeText={setNotes}
               placeholder="Add checklist items, links, or specific constraints..."
-              placeholderTextColor="rgba(245,243,255,0.35)"
+              placeholderTextColor={theme.textSubtle}
               multiline
               numberOfLines={3}
               className="text-[13.5px]"
               style={{
-                color: "#f5f3ff",
+                color: theme.text,
                 borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.12)",
+                borderColor: theme.chipBorder,
                 borderRadius: 12,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
@@ -770,6 +991,46 @@ export default function NewTaskScreen() {
                 textAlignVertical: "top",
               }}
             />
+          </GlassCard>
+
+          {/* Link */}
+          <GlassCard style={{ marginBottom: 16, padding: 14 }}>
+            <View className="flex-row items-center justify-between mb-2.5">
+              <Text
+                className="text-[10.5px] font-bold uppercase tracking-wider"
+                style={{ color: theme.textFaint }}
+              >
+                Link
+              </Text>
+              <Text className="text-[10px]" style={{ color: theme.textFaint }}>
+                Optional
+              </Text>
+            </View>
+            <View
+              className="flex-row items-center gap-2 rounded-xl"
+              style={{
+                borderWidth: 1,
+                borderColor: theme.chipBorder,
+                paddingHorizontal: 12,
+              }}
+            >
+              <MaterialIcons name="link" size={16} color={theme.textMuted} />
+              <TextInput
+                value={link}
+                onChangeText={setLink}
+                placeholder="Meeting link, doc, or any URL"
+                placeholderTextColor={theme.textSubtle}
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="text-[13.5px]"
+                style={{
+                  flex: 1,
+                  color: theme.text,
+                  paddingVertical: 12,
+                }}
+              />
+            </View>
           </GlassCard>
 
           {/* Deep Focus promo */}
@@ -785,23 +1046,27 @@ export default function NewTaskScreen() {
                   justifyContent: "center",
                 }}
               >
-                <MaterialIcons name="bolt" size={18} color="#cabeff" />
+                <MaterialIcons
+                  name="bolt"
+                  size={18}
+                  color={theme.accentPurpleLight}
+                />
               </LinearGradient>
               <View className="flex-1">
                 <View className="flex-row items-center justify-between mb-0.5">
                   <Text
                     className="text-[13.5px] font-bold"
-                    style={{ color: "#f5f3ff" }}
+                    style={{ color: theme.text }}
                   >
                     Deep Focus Session
                   </Text>
                   <View
                     className="px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: "rgba(63,224,197,0.18)" }}
+                    style={{ backgroundColor: `${theme.accentTeal}2e` }}
                   >
                     <Text
                       className="text-[10px] font-semibold"
-                      style={{ color: "#3fe0c5" }}
+                      style={{ color: theme.accentTeal }}
                     >
                       45m
                     </Text>
@@ -809,7 +1074,7 @@ export default function NewTaskScreen() {
                 </View>
                 <Text
                   className="text-[11.5px] leading-4"
-                  style={{ color: "rgba(245,243,255,0.45)" }}
+                  style={{ color: theme.textFaint }}
                   numberOfLines={2}
                 >
                   1 focus block scheduled. Reduces cognitive drag by binding
@@ -819,9 +1084,9 @@ export default function NewTaskScreen() {
             </View>
           </GlassCard>
 
-          {/* Create Task */}
+          {/* Create / Save Task */}
           <TouchableOpacity
-            onPress={handleCreate}
+            onPress={handleSave}
             disabled={title.trim().length === 0}
           >
             <LinearGradient
@@ -840,7 +1105,7 @@ export default function NewTaskScreen() {
             >
               <MaterialIcons name="check-circle" size={18} color="#fff" />
               <Text className="text-[15px] font-bold" style={{ color: "#fff" }}>
-                Create Task
+                {isEditing ? "Save Changes" : "Create Task"}
               </Text>
             </LinearGradient>
           </TouchableOpacity>

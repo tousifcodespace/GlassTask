@@ -1,25 +1,26 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import DateTimePicker, {
-    DateTimePickerEvent,
+  DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
 import { SettingsRow } from "@/components/settings-row";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { useSettingsStore } from "@/store/settings";
 import { formatClockTime } from "@/store/tasks";
 
@@ -48,19 +49,20 @@ function SectionLabel({
   label: string;
   right?: string;
 }) {
+  const theme = useAppTheme();
   return (
     <View className="flex-row items-center justify-between mb-2.5">
       <View className="flex-row items-center gap-1.5">
         <MaterialIcons name={icon} size={13} color={iconColor} />
         <Text
           className="text-[10.5px] font-bold uppercase tracking-wider"
-          style={{ color: "rgba(245,243,255,0.55)" }}
+          style={{ color: theme.textMuted }}
         >
           {label}
         </Text>
       </View>
       {right ? (
-        <Text className="text-[10.5px]" style={{ color: "rgba(245,243,255,0.4)" }}>
+        <Text className="text-[10.5px]" style={{ color: theme.textFaint }}>
           {right}
         </Text>
       ) : null}
@@ -69,29 +71,43 @@ function SectionLabel({
 }
 
 function Divider() {
-  return <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.08)" }} />;
+  const theme = useAppTheme();
+  return <View style={{ height: 1, backgroundColor: theme.divider }} />;
 }
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
 
   const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
-  const toggleNotificationsEnabled = useSettingsStore((s) => s.toggleNotificationsEnabled);
-  const reminderOffsetMinutes = useSettingsStore((s) => s.reminderOffsetMinutes);
-  const cycleReminderOffset = useSettingsStore((s) => s.cycleReminderOffset);
+  const toggleNotificationsEnabled = useSettingsStore(
+    (s) => s.toggleNotificationsEnabled,
+  );
   const reminderSound = useSettingsStore((s) => s.reminderSound);
   const cycleReminderSound = useSettingsStore((s) => s.cycleReminderSound);
-  const notificationHapticsEnabled = useSettingsStore((s) => s.notificationHapticsEnabled);
-  const toggleNotificationHaptics = useSettingsStore((s) => s.toggleNotificationHaptics);
+  const notificationHapticsEnabled = useSettingsStore(
+    (s) => s.notificationHapticsEnabled,
+  );
+  const toggleNotificationHaptics = useSettingsStore(
+    (s) => s.toggleNotificationHaptics,
+  );
   const snoozeMinutes = useSettingsStore((s) => s.snoozeMinutes);
   const cycleSnoozeMinutes = useSettingsStore((s) => s.cycleSnoozeMinutes);
 
-  const repeatMissedReminders = useSettingsStore((s) => s.repeatMissedReminders);
-  const toggleRepeatMissedReminders = useSettingsStore((s) => s.toggleRepeatMissedReminders);
+  const repeatMissedReminders = useSettingsStore(
+    (s) => s.repeatMissedReminders,
+  );
+  const toggleRepeatMissedReminders = useSettingsStore(
+    (s) => s.toggleRepeatMissedReminders,
+  );
   const remindUntilCompleted = useSettingsStore((s) => s.remindUntilCompleted);
-  const toggleRemindUntilCompleted = useSettingsStore((s) => s.toggleRemindUntilCompleted);
+  const toggleRemindUntilCompleted = useSettingsStore(
+    (s) => s.toggleRemindUntilCompleted,
+  );
   const showOverdueTasks = useSettingsStore((s) => s.showOverdueTasks);
-  const toggleShowOverdueTasks = useSettingsStore((s) => s.toggleShowOverdueTasks);
+  const toggleShowOverdueTasks = useSettingsStore(
+    (s) => s.toggleShowOverdueTasks,
+  );
 
   const quietHoursEnabled = useSettingsStore((s) => s.quietHoursEnabled);
   const toggleQuietHours = useSettingsStore((s) => s.toggleQuietHours);
@@ -105,12 +121,14 @@ export default function NotificationsScreen() {
 
   const onChangeStart = (event: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === "android") setShowStartPicker(false);
-    if (event.type === "set" && selected) setQuietHoursStart(formatClockTime(selected));
+    if (event.type === "set" && selected)
+      setQuietHoursStart(formatClockTime(selected));
   };
 
   const onChangeEnd = (event: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === "android") setShowEndPicker(false);
-    if (event.type === "set" && selected) setQuietHoursEnd(formatClockTime(selected));
+    if (event.type === "set" && selected)
+      setQuietHoursEnd(formatClockTime(selected));
   };
 
   const sendTestNotification = () => {
@@ -127,50 +145,86 @@ export default function NotificationsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <LinearGradient colors={["#2a1f52", "#150f30", "#0a0818"]} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={theme.bgGradient}
+        style={StyleSheet.absoluteFill}
+      />
 
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: 40,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
           <View className="flex-row items-center justify-between mb-5">
             <TouchableOpacity
-              onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace("/profile")
+              }
               className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: theme.chipBg,
+                borderWidth: 1,
+                borderColor: theme.chipBorder,
+              }}
             >
-              <MaterialIcons name="chevron-left" size={22} color="#f5f3ff" />
+              <MaterialIcons name="chevron-left" size={22} color={theme.text} />
             </TouchableOpacity>
 
             <View
               className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: theme.chipBg,
+                borderWidth: 1,
+                borderColor: theme.chipBorder,
+              }}
             >
-              <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#3fe0c5" }} />
-              <Text className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: "rgba(245,243,255,0.7)" }}>
+              <View
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: "#3fe0c5" }}
+              />
+              <Text
+                className="text-[10.5px] font-bold uppercase tracking-wider"
+                style={{ color: theme.textMuted }}
+              >
                 Alert Engine
               </Text>
             </View>
 
             <TouchableOpacity
               className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: theme.chipBg,
+                borderWidth: 1,
+                borderColor: theme.chipBorder,
+              }}
             >
-              <MaterialIcons name="tune" size={17} color="#f5f3ff" />
+              <MaterialIcons name="tune" size={17} color={theme.text} />
             </TouchableOpacity>
           </View>
 
           <View className="flex-row items-baseline gap-1.5 mb-1.5">
-            <Text className="text-[26px] font-extrabold" style={{ color: "#f5f3ff" }}>
+            <Text
+              className="text-[26px] font-extrabold"
+              style={{ color: theme.text }}
+            >
               Notifications
             </Text>
-            <Text className="text-[16px] font-medium" style={{ color: "rgba(245,243,255,0.4)" }}>
+            <Text
+              className="text-[16px] font-medium"
+              style={{ color: theme.textFaint }}
+            >
               / Reminders
             </Text>
           </View>
-          <Text className="text-[13px] leading-5 mb-5" style={{ color: "rgba(245,243,255,0.5)" }}>
+          <Text
+            className="text-[13px] leading-5 mb-5"
+            style={{ color: theme.textFaint }}
+          >
             Customize how you receive reminders &amp; stay in effortless flow.
           </Text>
 
@@ -181,18 +235,32 @@ export default function NotificationsScreen() {
                 className="w-9 h-9 rounded-full items-center justify-center mb-2.5"
                 style={{ backgroundColor: "rgba(124,108,246,0.2)" }}
               >
-                <MaterialIcons name="notifications-none" size={16} color="#cabeff" />
+                <MaterialIcons
+                  name="notifications-none"
+                  size={16}
+                  color="#cabeff"
+                />
               </View>
-              <Text className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "rgba(245,243,255,0.4)" }}>
+              <Text
+                className="text-[10px] font-bold uppercase tracking-wider mb-1"
+                style={{ color: theme.textFaint }}
+              >
                 Push Delivery
               </Text>
               <View className="flex-row items-center gap-1.5">
-                <Text className="text-[15px] font-bold" style={{ color: "#f5f3ff" }}>
+                <Text
+                  className="text-[15px] font-bold"
+                  style={{ color: theme.text }}
+                >
                   {notificationsEnabled ? "Instant" : "Paused"}
                 </Text>
                 <View
                   className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: notificationsEnabled ? "#3fe0c5" : "rgba(245,243,255,0.3)" }}
+                  style={{
+                    backgroundColor: notificationsEnabled
+                      ? "#3fe0c5"
+                      : theme.textSubtle,
+                  }}
                 />
               </View>
             </GlassCard>
@@ -204,10 +272,16 @@ export default function NotificationsScreen() {
               >
                 <MaterialIcons name="bedtime" size={15} color="#3fe0c5" />
               </View>
-              <Text className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "rgba(245,243,255,0.4)" }}>
+              <Text
+                className="text-[10px] font-bold uppercase tracking-wider mb-1"
+                style={{ color: theme.textFaint }}
+              >
                 Next Quiet Time
               </Text>
-              <Text className="text-[15px] font-bold" style={{ color: "#f5f3ff" }}>
+              <Text
+                className="text-[15px] font-bold"
+                style={{ color: theme.text }}
+              >
                 {quietHoursEnabled ? quietHoursStart : "Off"}
               </Text>
             </GlassCard>
@@ -231,32 +305,14 @@ export default function NotificationsScreen() {
                 <Switch
                   value={notificationsEnabled}
                   onValueChange={toggleNotificationsEnabled}
-                  trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                  thumbColor="#f5f3ff"
+                  trackColor={{
+                    false: "rgba(255,255,255,0.15)",
+                    true: "#7c6cf6",
+                  }}
+                  thumbColor={theme.text}
                 />
               }
             />
-            <Divider />
-            <View style={reminderRowStyle}>
-              <SettingsRow
-                icon="hourglass-empty"
-                iconColor="#7dd3fc"
-                iconBg="rgba(125,211,252,0.15)"
-                title="Default Reminder"
-                subtitle="Pre-execution lead alert"
-                onPress={notificationsEnabled ? cycleReminderOffset : undefined}
-                right={
-                  <View className="flex-row items-center gap-1.5">
-                    <View className="px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
-                      <Text className="text-[11px] font-semibold" style={{ color: "rgba(245,243,255,0.75)" }}>
-                        {reminderOffsetMinutes} minutes before
-                      </Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={17} color="rgba(245,243,255,0.35)" />
-                  </View>
-                }
-              />
-            </View>
             <Divider />
             <View style={reminderRowStyle}>
               <SettingsRow
@@ -268,12 +324,22 @@ export default function NotificationsScreen() {
                 onPress={notificationsEnabled ? cycleReminderSound : undefined}
                 right={
                   <View className="flex-row items-center gap-1.5">
-                    <View className="px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
-                      <Text className="text-[11px] font-semibold" style={{ color: "rgba(245,243,255,0.75)" }}>
+                    <View
+                      className="px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: theme.divider }}
+                    >
+                      <Text
+                        className="text-[11px] font-semibold"
+                        style={{ color: theme.text }}
+                      >
                         {reminderSound}
                       </Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={17} color="rgba(245,243,255,0.35)" />
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={17}
+                      color={theme.textSubtle}
+                    />
                   </View>
                 }
               />
@@ -291,8 +357,11 @@ export default function NotificationsScreen() {
                     disabled={!notificationsEnabled}
                     value={notificationHapticsEnabled}
                     onValueChange={toggleNotificationHaptics}
-                    trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                    thumbColor="#f5f3ff"
+                    trackColor={{
+                      false: "rgba(255,255,255,0.15)",
+                      true: "#7c6cf6",
+                    }}
+                    thumbColor={theme.text}
                   />
                 }
               />
@@ -308,12 +377,22 @@ export default function NotificationsScreen() {
                 onPress={notificationsEnabled ? cycleSnoozeMinutes : undefined}
                 right={
                   <View className="flex-row items-center gap-1.5">
-                    <View className="px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
-                      <Text className="text-[11px] font-semibold" style={{ color: "rgba(245,243,255,0.75)" }}>
+                    <View
+                      className="px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: theme.divider }}
+                    >
+                      <Text
+                        className="text-[11px] font-semibold"
+                        style={{ color: theme.text }}
+                      >
                         {snoozeMinutes} minutes
                       </Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={17} color="rgba(245,243,255,0.35)" />
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={17}
+                      color={theme.textSubtle}
+                    />
                   </View>
                 }
               />
@@ -321,7 +400,12 @@ export default function NotificationsScreen() {
           </GlassCard>
 
           {/* Smart Reminders */}
-          <SectionLabel icon="auto-awesome" iconColor="#60a5fa" label="Smart Reminders" right="AI Adaptive Cadence" />
+          <SectionLabel
+            icon="auto-awesome"
+            iconColor="#60a5fa"
+            label="Smart Reminders"
+            right="AI Adaptive Cadence"
+          />
           <GlassCard style={{ marginBottom: 20, paddingHorizontal: 16 }}>
             <SettingsRow
               icon="repeat"
@@ -333,24 +417,30 @@ export default function NotificationsScreen() {
                 <Switch
                   value={repeatMissedReminders}
                   onValueChange={toggleRepeatMissedReminders}
-                  trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                  thumbColor="#f5f3ff"
+                  trackColor={{
+                    false: "rgba(255,255,255,0.15)",
+                    true: "#7c6cf6",
+                  }}
+                  thumbColor={theme.text}
                 />
               }
             />
             <Divider />
             <SettingsRow
               icon="check-circle-outline"
-              iconColor="#f5f3ff"
-              iconBg="rgba(255,255,255,0.08)"
+              iconColor={theme.text}
+              iconBg={theme.divider}
               title="Remind me until completed"
               subtitle="Periodic nudge every 30 mins"
               right={
                 <Switch
                   value={remindUntilCompleted}
                   onValueChange={toggleRemindUntilCompleted}
-                  trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                  thumbColor="#f5f3ff"
+                  trackColor={{
+                    false: "rgba(255,255,255,0.15)",
+                    true: "#7c6cf6",
+                  }}
+                  thumbColor={theme.text}
                 />
               }
             />
@@ -365,15 +455,23 @@ export default function NotificationsScreen() {
                 <Switch
                   value={showOverdueTasks}
                   onValueChange={toggleShowOverdueTasks}
-                  trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                  thumbColor="#f5f3ff"
+                  trackColor={{
+                    false: "rgba(255,255,255,0.15)",
+                    true: "#7c6cf6",
+                  }}
+                  thumbColor={theme.text}
                 />
               }
             />
           </GlassCard>
 
           {/* Quiet Hours */}
-          <SectionLabel icon="bedtime" iconColor="#b57bff" label="Quiet Hours" right="Do Not Disturb" />
+          <SectionLabel
+            icon="bedtime"
+            iconColor="#b57bff"
+            label="Quiet Hours"
+            right="Do Not Disturb"
+          />
           <GlassCard style={{ marginBottom: 20, paddingHorizontal: 16 }}>
             <SettingsRow
               icon="bedtime"
@@ -385,8 +483,11 @@ export default function NotificationsScreen() {
                 <Switch
                   value={quietHoursEnabled}
                   onValueChange={toggleQuietHours}
-                  trackColor={{ false: "rgba(255,255,255,0.15)", true: "#7c6cf6" }}
-                  thumbColor="#f5f3ff"
+                  trackColor={{
+                    false: "rgba(255,255,255,0.15)",
+                    true: "#7c6cf6",
+                  }}
+                  thumbColor={theme.text}
                 />
               }
             />
@@ -394,19 +495,31 @@ export default function NotificationsScreen() {
             <View style={quietRowStyle}>
               <SettingsRow
                 icon="schedule"
-                iconColor="rgba(245,243,255,0.7)"
-                iconBg="rgba(255,255,255,0.08)"
+                iconColor={theme.textMuted}
+                iconBg={theme.divider}
                 title="Start"
                 subtitle="Evening wind-down threshold"
-                onPress={quietHoursEnabled ? () => setShowStartPicker(true) : undefined}
+                onPress={
+                  quietHoursEnabled ? () => setShowStartPicker(true) : undefined
+                }
                 right={
                   <View className="flex-row items-center gap-1.5">
-                    <View className="px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(124,108,246,0.25)" }}>
-                      <Text className="text-[11px] font-semibold" style={{ color: "#e4defc" }}>
+                    <View
+                      className="px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.accentPurple}33` }}
+                    >
+                      <Text
+                        className="text-[11px] font-semibold"
+                        style={{ color: theme.text }}
+                      >
                         {quietHoursStart}
                       </Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={17} color="rgba(245,243,255,0.35)" />
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={17}
+                      color={theme.textSubtle}
+                    />
                   </View>
                 }
               />
@@ -415,19 +528,31 @@ export default function NotificationsScreen() {
             <View style={quietRowStyle}>
               <SettingsRow
                 icon="wb-sunny"
-                iconColor="rgba(245,243,255,0.7)"
-                iconBg="rgba(255,255,255,0.08)"
+                iconColor={theme.textMuted}
+                iconBg={theme.divider}
                 title="End"
                 subtitle="Morning wake-up boundary"
-                onPress={quietHoursEnabled ? () => setShowEndPicker(true) : undefined}
+                onPress={
+                  quietHoursEnabled ? () => setShowEndPicker(true) : undefined
+                }
                 right={
                   <View className="flex-row items-center gap-1.5">
-                    <View className="px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(63,224,197,0.2)" }}>
-                      <Text className="text-[11px] font-semibold" style={{ color: "#a8f5e6" }}>
+                    <View
+                      className="px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: `${theme.accentTeal}33` }}
+                    >
+                      <Text
+                        className="text-[11px] font-semibold"
+                        style={{ color: theme.text }}
+                      >
                         {quietHoursEnd}
                       </Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={17} color="rgba(245,243,255,0.35)" />
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={17}
+                      color={theme.textSubtle}
+                    />
                   </View>
                 }
               />
@@ -437,14 +562,36 @@ export default function NotificationsScreen() {
           {showStartPicker &&
             (Platform.OS === "ios" ? (
               <Modal transparent animationType="fade">
-                <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(10,8,24,0.6)" }}>
-                  <View style={{ backgroundColor: "#1a1438", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24 }}>
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: "flex-end",
+                    backgroundColor: "rgba(10,8,24,0.6)",
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor:
+                        theme.mode === "dark" ? "#1a1438" : "#ffffff",
+                      borderTopLeftRadius: 20,
+                      borderTopRightRadius: 20,
+                      paddingBottom: 24,
+                    }}
+                  >
                     <View className="flex-row items-center justify-between px-5 py-3">
-                      <Text className="text-[13px] font-semibold" style={{ color: "rgba(245,243,255,0.6)" }}>
+                      <Text
+                        className="text-[13px] font-semibold"
+                        style={{ color: theme.textMuted }}
+                      >
                         Quiet Hours Start
                       </Text>
-                      <TouchableOpacity onPress={() => setShowStartPicker(false)}>
-                        <Text className="text-[13px] font-bold" style={{ color: "#b57bff" }}>
+                      <TouchableOpacity
+                        onPress={() => setShowStartPicker(false)}
+                      >
+                        <Text
+                          className="text-[13px] font-bold"
+                          style={{ color: "#b57bff" }}
+                        >
                           Done
                         </Text>
                       </TouchableOpacity>
@@ -453,27 +600,52 @@ export default function NotificationsScreen() {
                       value={parseTimeLabel(quietHoursStart)}
                       mode="time"
                       display="spinner"
-                      themeVariant="dark"
+                      themeVariant={theme.mode === "dark" ? "dark" : "light"}
                       onChange={onChangeStart}
                     />
                   </View>
                 </View>
               </Modal>
             ) : (
-              <DateTimePicker value={parseTimeLabel(quietHoursStart)} mode="time" display="default" onChange={onChangeStart} />
+              <DateTimePicker
+                value={parseTimeLabel(quietHoursStart)}
+                mode="time"
+                display="default"
+                onChange={onChangeStart}
+              />
             ))}
 
           {showEndPicker &&
             (Platform.OS === "ios" ? (
               <Modal transparent animationType="fade">
-                <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(10,8,24,0.6)" }}>
-                  <View style={{ backgroundColor: "#1a1438", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24 }}>
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: "flex-end",
+                    backgroundColor: "rgba(10,8,24,0.6)",
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor:
+                        theme.mode === "dark" ? "#1a1438" : "#ffffff",
+                      borderTopLeftRadius: 20,
+                      borderTopRightRadius: 20,
+                      paddingBottom: 24,
+                    }}
+                  >
                     <View className="flex-row items-center justify-between px-5 py-3">
-                      <Text className="text-[13px] font-semibold" style={{ color: "rgba(245,243,255,0.6)" }}>
+                      <Text
+                        className="text-[13px] font-semibold"
+                        style={{ color: theme.textMuted }}
+                      >
                         Quiet Hours End
                       </Text>
                       <TouchableOpacity onPress={() => setShowEndPicker(false)}>
-                        <Text className="text-[13px] font-bold" style={{ color: "#b57bff" }}>
+                        <Text
+                          className="text-[13px] font-bold"
+                          style={{ color: "#b57bff" }}
+                        >
                           Done
                         </Text>
                       </TouchableOpacity>
@@ -482,19 +654,28 @@ export default function NotificationsScreen() {
                       value={parseTimeLabel(quietHoursEnd)}
                       mode="time"
                       display="spinner"
-                      themeVariant="dark"
+                      themeVariant={theme.mode === "dark" ? "dark" : "light"}
                       onChange={onChangeEnd}
                     />
                   </View>
                 </View>
               </Modal>
             ) : (
-              <DateTimePicker value={parseTimeLabel(quietHoursEnd)} mode="time" display="default" onChange={onChangeEnd} />
+              <DateTimePicker
+                value={parseTimeLabel(quietHoursEnd)}
+                mode="time"
+                display="default"
+                onChange={onChangeEnd}
+              />
             ))}
 
           {/* Proactive intelligence banner */}
           <GlassCard
-            style={{ marginBottom: 20, padding: 14, borderColor: "rgba(63,224,197,0.3)" }}
+            style={{
+              marginBottom: 20,
+              padding: 14,
+              borderColor: "rgba(63,224,197,0.3)",
+            }}
           >
             <View className="flex-row gap-3">
               <View
@@ -505,13 +686,23 @@ export default function NotificationsScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <View className="flex-row items-center gap-1.5 mb-1">
-                  <Text className="text-[13px] font-bold" style={{ color: "#f5f3ff" }}>
+                  <Text
+                    className="text-[13px] font-bold"
+                    style={{ color: theme.text }}
+                  >
                     Proactive Intelligence
                   </Text>
-                  <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#3fe0c5" }} />
+                  <View
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: "#3fe0c5" }}
+                  />
                 </View>
-                <Text className="text-[12px] leading-4" style={{ color: "rgba(245,243,255,0.5)" }}>
-                  Notifications will help you stay on track without missing important tasks.
+                <Text
+                  className="text-[12px] leading-4"
+                  style={{ color: theme.textFaint }}
+                >
+                  Notifications will help you stay on track without missing
+                  important tasks.
                 </Text>
               </View>
             </View>
@@ -521,10 +712,17 @@ export default function NotificationsScreen() {
           <TouchableOpacity onPress={sendTestNotification}>
             <View
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl"
-              style={{ backgroundColor: "rgba(124,108,246,0.18)", borderWidth: 1, borderColor: "rgba(124,108,246,0.4)" }}
+              style={{
+                backgroundColor: "rgba(124,108,246,0.18)",
+                borderWidth: 1,
+                borderColor: "rgba(124,108,246,0.4)",
+              }}
             >
               <MaterialIcons name="send" size={16} color="#cabeff" />
-              <Text className="text-[13px] font-bold uppercase tracking-wider" style={{ color: "#cabeff" }}>
+              <Text
+                className="text-[13px] font-bold uppercase tracking-wider"
+                style={{ color: "#cabeff" }}
+              >
                 Send Test Notification Chime
               </Text>
             </View>

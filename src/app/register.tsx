@@ -3,21 +3,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
+import { GoogleIcon } from "@/components/google-icon";
+import { showAlert } from "@/lib/alert";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { useAuthStore } from "@/store/auth";
-import { useProfileStore } from "@/store/profile";
 
 const STRENGTH_META = [
   { label: "Too short", color: "#ff6b81" },
@@ -26,8 +28,13 @@ const STRENGTH_META = [
   { label: "Strong", color: "#7c6cf6" },
 ];
 
-function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
-  if (pw.length === 0) return { score: 0, label: "", color: "rgba(255,255,255,0.15)" };
+function getPasswordStrength(pw: string): {
+  score: number;
+  label: string;
+  color: string;
+} {
+  if (pw.length === 0)
+    return { score: 0, label: "", color: "rgba(255,255,255,0.15)" };
   let score = 0;
   if (pw.length >= 8) score++;
   if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
@@ -38,8 +45,9 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
   const register = useAuthStore((s) => s.register);
-  const updateProfile = useProfileStore((s) => s.updateProfile);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,27 +57,43 @@ export default function RegisterScreen() {
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
 
-  const handleCreateAccount = () => {
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  const handleCreateAccount = async () => {
     if (!agreedToTerms) {
-      Alert.alert(
+      showAlert(
         "Almost there",
         "Please agree to the Terms of Service and Privacy Policy first.",
       );
       return;
     }
-    const result = register(fullName, email, password);
+    const result = await register(fullName, email, password);
     if (!result.ok) {
-      Alert.alert("Couldn't create account", result.error);
+      showAlert("Couldn't create account", result.error);
       return;
     }
-    updateProfile({ fullName: fullName.trim(), email: email.trim().toLowerCase() });
-    router.replace("/");
+    // No client-side profile write needed here: the `profiles` table has a
+    // DB trigger that creates the row from signup metadata (full name,
+    // email) the instant the auth.users row is inserted, and the auth
+    // store's onAuthStateChange listener fetches it into useProfileStore
+    // once a session exists.
+
+    if (result.signedIn) {
+      showAlert("Welcome to GlassTask", "Your account is ready to go.");
+      router.replace("/");
+    } else {
+      showAlert(
+        "Check your email",
+        "We've sent a confirmation link — verify your email, then log in.",
+      );
+      router.replace("/login");
+    }
   };
 
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
-        colors={["#2a1f52", "#150f30", "#0a0818"]}
+        colors={theme.bgGradient}
         style={StyleSheet.absoluteFill}
       />
 
@@ -87,7 +111,9 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <TouchableOpacity
-              onPress={() => (router.canGoBack() ? router.back() : router.replace("/login"))}
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace("/login")
+              }
               className="w-10 h-10 rounded-full items-center justify-center mb-4"
               style={{
                 backgroundColor: "rgba(255,255,255,0.06)",
@@ -95,7 +121,7 @@ export default function RegisterScreen() {
                 borderColor: "rgba(255,255,255,0.12)",
               }}
             >
-              <MaterialIcons name="chevron-left" size={22} color="#f5f3ff" />
+              <MaterialIcons name="chevron-left" size={22} color={theme.text} />
             </TouchableOpacity>
 
             {/* Logo */}
@@ -117,7 +143,7 @@ export default function RegisterScreen() {
               <View className="flex-row">
                 <Text
                   className="text-[24px] font-extrabold"
-                  style={{ color: "#f5f3ff" }}
+                  style={{ color: theme.text }}
                 >
                   Create{" "}
                 </Text>
@@ -130,7 +156,7 @@ export default function RegisterScreen() {
               </View>
               <Text
                 className="text-[13px] mt-1"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Start organizing your day with GlassTask
               </Text>
@@ -140,40 +166,44 @@ export default function RegisterScreen() {
             <GlassCard style={{ padding: 20 }}>
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Full Name
               </Text>
               <View
                 className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl mb-4"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="person-outline" size={17} color="#cabeff" />
+                <MaterialIcons
+                  name="person-outline"
+                  size={17}
+                  color="#cabeff"
+                />
                 <TextInput
                   value={fullName}
                   onChangeText={setFullName}
                   placeholder="Your name"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
-                  style={{ flex: 1, color: "#f5f3ff", fontSize: 15 }}
+                  placeholderTextColor={theme.textSubtle}
+                  style={{ flex: 1, color: theme.text, fontSize: 15 }}
                 />
               </View>
 
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Email Address
               </Text>
               <View
                 className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl mb-4"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <MaterialIcons name="mail-outline" size={17} color="#cabeff" />
@@ -181,25 +211,25 @@ export default function RegisterScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   autoCapitalize="none"
                   keyboardType="email-address"
-                  style={{ flex: 1, color: "#f5f3ff", fontSize: 15 }}
+                  style={{ flex: 1, color: theme.text, fontSize: 15 }}
                 />
               </View>
 
               <Text
                 className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Password
               </Text>
               <View
                 className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl mb-2"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
                 <MaterialIcons name="lock-outline" size={17} color="#cabeff" />
@@ -207,15 +237,15 @@ export default function RegisterScreen() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="At least 8 characters"
-                  placeholderTextColor="rgba(245,243,255,0.3)"
+                  placeholderTextColor={theme.textSubtle}
                   secureTextEntry={!showPassword}
-                  style={{ flex: 1, color: "#f5f3ff", fontSize: 15 }}
+                  style={{ flex: 1, color: theme.text, fontSize: 15 }}
                 />
                 <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
                   <MaterialIcons
                     name={showPassword ? "visibility-off" : "visibility"}
                     size={18}
-                    color="rgba(245,243,255,0.45)"
+                    color={theme.textFaint}
                   />
                 </TouchableOpacity>
               </View>
@@ -232,7 +262,7 @@ export default function RegisterScreen() {
                       backgroundColor:
                         i <= strength.score && password.length > 0
                           ? strength.color
-                          : "rgba(255,255,255,0.1)",
+                          : theme.chipBorder,
                     }}
                   />
                 ))}
@@ -241,14 +271,18 @@ export default function RegisterScreen() {
               <View className="flex-row items-center justify-between mb-5">
                 <View className="flex-row items-center gap-1.5">
                   <MaterialIcons
-                    name={password.length >= 8 ? "check-circle" : "radio-button-unchecked"}
+                    name={
+                      password.length >= 8
+                        ? "check-circle"
+                        : "radio-button-unchecked"
+                    }
                     size={13}
-                    color={password.length >= 8 ? "#3fe0c5" : "rgba(245,243,255,0.3)"}
+                    color={password.length >= 8 ? "#3fe0c5" : theme.textSubtle}
                   />
                   <Text
                     className="text-[11.5px]"
                     style={{
-                      color: password.length >= 8 ? "#3fe0c5" : "rgba(245,243,255,0.4)",
+                      color: password.length >= 8 ? "#3fe0c5" : theme.textFaint,
                     }}
                   >
                     Use at least 8 characters
@@ -273,7 +307,9 @@ export default function RegisterScreen() {
                   style={{
                     backgroundColor: agreedToTerms ? "#3fe0c5" : "transparent",
                     borderWidth: 1.5,
-                    borderColor: agreedToTerms ? "#3fe0c5" : "rgba(255,255,255,0.25)",
+                    borderColor: agreedToTerms
+                      ? "#3fe0c5"
+                      : "rgba(255,255,255,0.25)",
                   }}
                 >
                   {agreedToTerms && (
@@ -282,7 +318,7 @@ export default function RegisterScreen() {
                 </View>
                 <Text
                   className="text-[12.5px] flex-1"
-                  style={{ color: "rgba(245,243,255,0.6)" }}
+                  style={{ color: theme.textMuted }}
                 >
                   I agree to the{" "}
                   <Text style={{ color: "#3fe0c5", fontWeight: "600" }}>
@@ -295,7 +331,10 @@ export default function RegisterScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleCreateAccount}>
+              <TouchableOpacity
+                onPress={handleCreateAccount}
+                disabled={isLoading}
+              >
                 <LinearGradient
                   colors={["#7c6cf6", "#22d3ee"]}
                   start={{ x: 0, y: 0 }}
@@ -307,47 +346,62 @@ export default function RegisterScreen() {
                     gap: 8,
                     paddingVertical: 15,
                     borderRadius: 100,
+                    opacity: isLoading ? 0.7 : 1,
                   }}
                 >
-                  <MaterialIcons name="person-add" size={17} color="#150f30" />
-                  <Text
-                    className="text-[15px] font-bold"
-                    style={{ color: "#150f30" }}
-                  >
-                    Create Account
-                  </Text>
+                  {isLoading ? (
+                    <ActivityIndicator color="#150f30" />
+                  ) : (
+                    <>
+                      <MaterialIcons
+                        name="person-add"
+                        size={17}
+                        color="#150f30"
+                      />
+                      <Text
+                        className="text-[15px] font-bold"
+                        style={{ color: "#150f30" }}
+                      >
+                        Create Account
+                      </Text>
+                    </>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
               <View className="flex-row items-center gap-3 my-5">
-                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.1)" }} />
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: theme.divider }}
+                />
                 <Text
                   className="text-[10.5px] font-semibold"
-                  style={{ color: "rgba(245,243,255,0.35)" }}
+                  style={{ color: theme.textSubtle }}
                 >
                   OR
                 </Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.1)" }} />
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: theme.divider }}
+                />
               </View>
 
               <TouchableOpacity
-                onPress={() =>
-                  Alert.alert(
-                    "Not wired up yet",
-                    "Google sign-in isn't connected in this local build.",
-                  )
-                }
+                onPress={async () => {
+                  const result = await signInWithGoogle();
+                  if (!result.ok) {
+                    showAlert("Couldn't sign in with Google", result.error);
+                  }
+                }}
                 className="flex-row items-center justify-center gap-2.5 py-3.5 rounded-2xl"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: theme.chipBg,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: theme.chipBorder,
                 }}
               >
-                <MaterialIcons name="g-translate" size={16} color="rgba(245,243,255,0.7)" />
+                <GoogleIcon size={16} />
                 <Text
                   className="text-[14px] font-semibold"
-                  style={{ color: "rgba(245,243,255,0.85)" }}
+                  style={{ color: theme.text }}
                 >
                   Continue with Google
                 </Text>
@@ -360,10 +414,12 @@ export default function RegisterScreen() {
             >
               <Text
                 className="text-[13px] text-center"
-                style={{ color: "rgba(245,243,255,0.5)" }}
+                style={{ color: theme.textFaint }}
               >
                 Already have an account?{" "}
-                <Text style={{ color: "#3fe0c5", fontWeight: "700" }}>Log In</Text>
+                <Text style={{ color: "#3fe0c5", fontWeight: "700" }}>
+                  Log In
+                </Text>
               </Text>
             </TouchableOpacity>
           </ScrollView>
