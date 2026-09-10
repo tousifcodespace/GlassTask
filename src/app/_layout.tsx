@@ -23,7 +23,11 @@ SplashScreen.preventAutoHideAsync();
 
 const AUTH_ROUTES = ["login", "register", "forgot-password"];
 
-function useProtectedRoute(isAuthenticated: boolean, hasHydrated: boolean) {
+function useProtectedRoute(
+  isAuthenticated: boolean,
+  hasHydrated: boolean,
+  mfaRequired: boolean,
+) {
   const segments = useSegments();
   const router = useRouter();
 
@@ -40,6 +44,18 @@ function useProtectedRoute(isAuthenticated: boolean, hasHydrated: boolean) {
     // its own missing/invalid-session state internally.
     if (current === "reset-password" || current === "auth-callback") return;
 
+    // Signed in but the account has 2FA and this session hasn't passed the
+    // TOTP challenge yet — hold them on mfa-challenge regardless of which
+    // route they land on, until they clear it.
+    if (isAuthenticated && mfaRequired && current !== "mfa-challenge") {
+      router.replace("/mfa-challenge");
+      return;
+    }
+    if (current === "mfa-challenge" && (!isAuthenticated || !mfaRequired)) {
+      router.replace(isAuthenticated ? "/" : "/login");
+      return;
+    }
+
     const inAuthGroup = AUTH_ROUTES.includes(current);
 
     if (!isAuthenticated && !inAuthGroup) {
@@ -47,12 +63,13 @@ function useProtectedRoute(isAuthenticated: boolean, hasHydrated: boolean) {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace("/");
     }
-  }, [isAuthenticated, hasHydrated, segments, router]);
+  }, [isAuthenticated, mfaRequired, hasHydrated, segments, router]);
 }
 
 export default function RootLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const mfaRequired = useAuthStore((s) => s.mfaRequired);
   const init = useAuthStore((s) => s.init);
   const theme = useAppTheme();
 
@@ -60,7 +77,7 @@ export default function RootLayout() {
     init();
   }, [init]);
 
-  useProtectedRoute(isAuthenticated, hasHydrated);
+  useProtectedRoute(isAuthenticated, hasHydrated, mfaRequired);
 
   // Auto-generate today's occurrence for any Daily/Weekly/Monthly recurring tasks.
   useEffect(() => {

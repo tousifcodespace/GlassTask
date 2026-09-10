@@ -17,8 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
 import { GoogleIcon } from "@/components/google-icon";
-import { showAlert } from "@/lib/alert";
 import { useAppTheme } from "@/hooks/use-app-theme";
+import { showAlert } from "@/lib/alert";
 import { useAuthStore } from "@/store/auth";
 
 const STRENGTH_META = [
@@ -54,12 +54,19 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
 
   const isLoading = useAuthStore((s) => s.isLoading);
 
   const handleCreateAccount = async () => {
+    // Guards against a fast double-tap firing signUp() twice before the
+    // store's own isLoading flag has propagated through a re-render — that
+    // race left an orphaned `profiles` row with the same id as a later,
+    // genuinely-new signup attempt, breaking it with a duplicate-key error.
+    if (isSubmitting) return;
+
     if (!agreedToTerms) {
       showAlert(
         "Almost there",
@@ -67,7 +74,9 @@ export default function RegisterScreen() {
       );
       return;
     }
+    setIsSubmitting(true);
     const result = await register(fullName, email, password);
+    setIsSubmitting(false);
     if (!result.ok) {
       showAlert("Couldn't create account", result.error);
       return;
@@ -333,7 +342,7 @@ export default function RegisterScreen() {
 
               <TouchableOpacity
                 onPress={handleCreateAccount}
-                disabled={isLoading}
+                disabled={isLoading || isSubmitting}
               >
                 <LinearGradient
                   colors={["#7c6cf6", "#22d3ee"]}
@@ -346,10 +355,10 @@ export default function RegisterScreen() {
                     gap: 8,
                     paddingVertical: 15,
                     borderRadius: 100,
-                    opacity: isLoading ? 0.7 : 1,
+                    opacity: isLoading || isSubmitting ? 0.7 : 1,
                   }}
                 >
-                  {isLoading ? (
+                  {isLoading || isSubmitting ? (
                     <ActivityIndicator color="#150f30" />
                   ) : (
                     <>
