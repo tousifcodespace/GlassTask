@@ -4,7 +4,7 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal,
   Platform,
@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/glass-card";
 import { ScreenHeader } from "@/components/screen-header";
+import type { AppTheme } from "@/constants/app-theme";
 import { useAppTheme } from "@/hooks/use-app-theme";
 import {
   cancelScheduledNotification,
@@ -76,6 +77,408 @@ function formatDuration(min: number): string {
 }
 
 type Subtask = { id: string; text: string; done: boolean };
+
+const MONTH_NAMES_FULL = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const WEEKDAY_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
+
+/**
+ * @react-native-community/datetimepicker has no web implementation at
+ * all — it renders nothing there, so tapping "Scheduled Date"/"Time &
+ * Reminder" silently did nothing on web. This is a from-scratch
+ * replacement used only on Platform.OS === "web"; native (iOS/Android)
+ * keeps using the real native picker unchanged.
+ */
+function WebDatePickerModal({
+  visible,
+  value,
+  onClose,
+  onSelect,
+  theme,
+}: {
+  visible: boolean;
+  value: Date;
+  onClose: () => void;
+  onSelect: (date: Date) => void;
+  theme: AppTheme;
+}) {
+  const [viewYear, setViewYear] = useState(value.getFullYear());
+  const [viewMonth, setViewMonth] = useState(value.getMonth());
+
+  useEffect(() => {
+    if (visible) {
+      setViewYear(value.getFullYear());
+      setViewMonth(value.getMonth());
+    }
+    // Only re-sync when the modal opens, not on every value change while open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const goPrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else setViewMonth((m) => m - 1);
+  };
+  const goNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else setViewMonth((m) => m + 1);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(10,8,24,0.6)",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+        }}
+      >
+        <View style={{ width: "100%", maxWidth: 360 }}>
+          <GlassCard style={{ padding: 18 }}>
+            <View className="flex-row items-center justify-between mb-4">
+              <TouchableOpacity
+                onPress={goPrevMonth}
+                className="w-8 h-8 rounded-full items-center justify-center"
+                style={{ backgroundColor: theme.chipBg }}
+              >
+                <MaterialIcons
+                  name="chevron-left"
+                  size={18}
+                  color={theme.text}
+                />
+              </TouchableOpacity>
+              <Text
+                className="text-[14.5px] font-bold"
+                style={{ color: theme.text }}
+              >
+                {MONTH_NAMES_FULL[viewMonth]} {viewYear}
+              </Text>
+              <TouchableOpacity
+                onPress={goNextMonth}
+                className="w-8 h-8 rounded-full items-center justify-center"
+                style={{ backgroundColor: theme.chipBg }}
+              >
+                <MaterialIcons
+                  name="chevron-right"
+                  size={18}
+                  color={theme.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View className="flex-row mb-2">
+              {WEEKDAY_SHORT.map((w, i) => (
+                <Text
+                  key={`${w}-${i}`}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: theme.textFaint,
+                  }}
+                >
+                  {w}
+                </Text>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+              {cells.map((day, idx) => {
+                const isSelected =
+                  day !== null &&
+                  day === value.getDate() &&
+                  viewMonth === value.getMonth() &&
+                  viewYear === value.getFullYear();
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    disabled={day === null}
+                    onPress={() =>
+                      day && onSelect(new Date(viewYear, viewMonth, day))
+                    }
+                    style={{
+                      width: `${100 / 7}%`,
+                      aspectRatio: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {day !== null && (
+                      <View
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: isSelected
+                            ? theme.accentPurple
+                            : "transparent",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? "800" : "500",
+                            color: isSelected ? "#ffffff" : theme.text,
+                          }}
+                        >
+                          {day}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                marginTop: 14,
+                alignItems: "center",
+                paddingVertical: 10,
+              }}
+            >
+              <Text
+                style={{ color: "#b57bff", fontWeight: "700", fontSize: 13 }}
+              >
+                Close
+              </Text>
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function WebTimePickerModal({
+  visible,
+  value,
+  onClose,
+  onSelect,
+  theme,
+}: {
+  visible: boolean;
+  value: Date;
+  onClose: () => void;
+  onSelect: (date: Date) => void;
+  theme: AppTheme;
+}) {
+  const [hour, setHour] = useState("12");
+  const [minute, setMinute] = useState("00");
+  const [period, setPeriod] = useState<"AM" | "PM">("AM");
+
+  useEffect(() => {
+    if (visible) {
+      const h = value.getHours() % 12 || 12;
+      setHour(String(h));
+      setMinute(value.getMinutes().toString().padStart(2, "0"));
+      setPeriod(value.getHours() >= 12 ? "PM" : "AM");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const handleDone = () => {
+    let h = parseInt(hour, 10);
+    let m = parseInt(minute, 10);
+    if (Number.isNaN(h) || h < 1 || h > 12) h = 12;
+    if (Number.isNaN(m) || m < 0 || m > 59) m = 0;
+    let hours24 = h % 12;
+    if (period === "PM") hours24 += 12;
+    const result = new Date(value);
+    result.setHours(hours24, m, 0, 0);
+    onSelect(result);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(10,8,24,0.6)",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+        }}
+      >
+        <View style={{ width: "100%", maxWidth: 320 }}>
+          <GlassCard style={{ padding: 20 }}>
+            <Text
+              className="text-[15px] font-extrabold mb-4"
+              style={{ color: theme.text }}
+            >
+              Set Time
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 18,
+              }}
+            >
+              <TextInput
+                value={hour}
+                onChangeText={(t) =>
+                  setHour(t.replace(/[^0-9]/g, "").slice(0, 2))
+                }
+                keyboardType="number-pad"
+                maxLength={2}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontSize: 22,
+                  fontWeight: "800",
+                  color: theme.text,
+                  backgroundColor: theme.chipBg,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  borderWidth: 1,
+                  borderColor: theme.chipBorder,
+                }}
+              />
+              <Text
+                style={{ fontSize: 22, fontWeight: "800", color: theme.text }}
+              >
+                :
+              </Text>
+              <TextInput
+                value={minute}
+                onChangeText={(t) =>
+                  setMinute(t.replace(/[^0-9]/g, "").slice(0, 2))
+                }
+                keyboardType="number-pad"
+                maxLength={2}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontSize: 22,
+                  fontWeight: "800",
+                  color: theme.text,
+                  backgroundColor: theme.chipBg,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  borderWidth: 1,
+                  borderColor: theme.chipBorder,
+                }}
+              />
+              <View style={{ gap: 6 }}>
+                {(["AM", "PM"] as const).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setPeriod(p)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 10,
+                      backgroundColor:
+                        period === p ? theme.accentPurple : theme.chipBg,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: period === p ? "#ffffff" : theme.textFaint,
+                      }}
+                    >
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={onClose} style={{ flex: 1 }}>
+                <View
+                  style={{
+                    borderRadius: 100,
+                    paddingVertical: 13,
+                    alignItems: "center",
+                    backgroundColor: theme.chipBg,
+                    borderWidth: 1,
+                    borderColor: theme.chipBorder,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontWeight: "700",
+                      fontSize: 13,
+                    }}
+                  >
+                    Cancel
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDone} style={{ flex: 1 }}>
+                <LinearGradient
+                  colors={["#7c6cf6", "#22d3ee"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    borderRadius: 100,
+                    paddingVertical: 13,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#150f30",
+                      fontWeight: "700",
+                      fontSize: 13,
+                    }}
+                  >
+                    Done
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </GlassCard>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export default function NewTaskScreen() {
   const router = useRouter();
@@ -602,6 +1005,17 @@ export default function NewTaskScreen() {
                   </View>
                 </View>
               </Modal>
+            ) : Platform.OS === "web" ? (
+              <WebDatePickerModal
+                visible={showDatePicker}
+                value={scheduledDate}
+                theme={theme}
+                onClose={() => setShowDatePicker(false)}
+                onSelect={(d) => {
+                  setScheduledDate(d);
+                  setShowDatePicker(false);
+                }}
+              />
             ) : (
               <DateTimePicker
                 value={scheduledDate}
@@ -658,6 +1072,17 @@ export default function NewTaskScreen() {
                   </View>
                 </View>
               </Modal>
+            ) : Platform.OS === "web" ? (
+              <WebTimePickerModal
+                visible={showTimePicker}
+                value={scheduledTime}
+                theme={theme}
+                onClose={() => setShowTimePicker(false)}
+                onSelect={(t) => {
+                  setScheduledTime(t);
+                  setShowTimePicker(false);
+                }}
+              />
             ) : (
               <DateTimePicker
                 value={scheduledTime}

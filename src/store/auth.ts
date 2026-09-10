@@ -43,12 +43,25 @@ function getOAuthRedirectUrl(): string {
  * this store doesn't need its own zustand `persist` — it just mirrors
  * whatever Supabase reports via getSession() / onAuthStateChange().
  */
+type MfaEnrollResult =
+  | { ok: true; factorId: string; qrCodeSvg: string; secret: string }
+  | { ok: false; error: string };
+
+type MfaVerifyResult = { ok: true } | { ok: false; error: string };
+
 type AuthStore = {
   session: Session | null;
   user: User | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
   isLoading: boolean;
+  /**
+   * True once the user is signed in (isAuthenticated) but still needs to
+   * pass a TOTP challenge before using the app — i.e. their session is at
+   * AAL1 but their account requires AAL2. Distinct from isAuthenticated:
+   * a session can exist without yet satisfying MFA.
+   */
+  mfaRequired: boolean;
   init: () => void;
   register: (
     fullName: string,
@@ -67,22 +80,43 @@ type AuthStore = {
     newPassword: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => Promise<void>;
+  /** Re-checks whether the current session still needs an MFA challenge and updates `mfaRequired`. */
+  refreshMfaStatus: () => Promise<void>;
+  /** True if the account has at least one verified TOTP factor. */
+  hasMfaEnrolled: () => Promise<boolean>;
+  /** Starts enrolling a new TOTP factor — returns a QR code (SVG) and manual-entry secret. */
+  enrollMfa: () => Promise<MfaEnrollResult>;
+  /** Verifies a 6-digit code against a factor that was just enrolled, completing setup. */
+  confirmMfaEnrollment: (
+    factorId: string,
+    code: string,
+  ) => Promise<MfaVerifyResult>;
+  /** Verifies a 6-digit code during login, satisfying the AAL2 requirement. */
+  verifyMfaChallenge: (code: string) => Promise<MfaVerifyResult>;
+  /** Removes 2FA from the account entirely. */
+  disableMfa: () => Promise<MfaVerifyResult>;
 };
 
 let initialized = false;
 
-export const useAuthStore = create<AuthStore>((set) => ({
+export const useAuthStore = create<AuthStore>((set, get) => ({
   session: null,
   user: null,
   isAuthenticated: false,
   hasHydrated: false,
   isLoading: false,
+  mfaRequired: false,
 
   init: () => {
     if (initialized) return;
     initialized = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const syncMfaStatus = async () => {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      set({ mfaRequired: !!data && data.currentLevel !== data.nextLevel });
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       set({
         session,
         user: session?.user ?? null,
@@ -91,10 +125,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
       });
       if (session?.user) {
         useProfileStore.getState().fetchProfile(session.user.id);
+        await syncMfaStatus();
       }
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange(async (_event, session) => {
       set({
         session,
         user: session?.user ?? null,
@@ -105,8 +140,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // keep showing the previous user's cached name/bio/etc.
       if (session?.user) {
         useProfileStore.getState().fetchProfile(session.user.id);
+        await syncMfaStatus();
       } else {
         useProfileStore.getState().clearProfile();
+        set({ mfaRequired: false });
       }
     });
   },
@@ -143,6 +180,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         user: data.session!.user,
         isAuthenticated: true,
       });
+      await get().refreshMfaStatus();
     }
 
     return { ok: true, signedIn };
@@ -170,6 +208,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
       user: data.session?.user ?? null,
       isAuthenticated: !!data.session,
     });
+
+    if (data.session) {
+      await get().refreshMfaStatus();
+    }
 
     return { ok: true };
   },
@@ -229,5 +271,114 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   logout: async () => {
     await supabase.auth.signOut();
+  },
+
+  refreshMfaStatus: async () => {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    set({ mfaRequired: !!data && data.currentLevel !== data.nextLevel });
+  },
+
+  hasMfaEnrolled: async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error || !data) return false;
+    return data.totp.some((f) => f.status === "verified");
+  },
+
+  enrollMfa: async () => {
+    // Supabase only allows one *unverified* TOTP factor to exist at a
+    // time — if a previous enrollment attempt was abandoned partway,
+    // starting a new one fails until that stale factor is removed first.
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    const stale = existing?.totp.find((f) => String(f.status) === "unverified");
+    if (stale) {
+      await supabase.auth.mfa.unenroll({ factorId: stale.id });
+    }
+
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+    });
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message ?? "Couldn't start 2FA setup.",
+      };
+    }
+    return {
+      ok: true,
+      factorId: data.id,
+      qrCodeSvg: data.totp.qr_code,
+      secret: data.totp.secret,
+    };
+  },
+
+  confirmMfaEnrollment: async (factorId, code) => {
+    const { data: challenge, error: challengeError } =
+      await supabase.auth.mfa.challenge({ factorId });
+    if (challengeError || !challenge) {
+      return {
+        ok: false,
+        error: challengeError?.message ?? "Couldn't verify that code.",
+      };
+    }
+
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId,
+      challengeId: challenge.id,
+      code: code.trim(),
+    });
+    if (verifyError) return { ok: false, error: verifyError.message };
+
+    await get().refreshMfaStatus();
+    return { ok: true };
+  },
+
+  verifyMfaChallenge: async (code) => {
+    const { data: factors, error: factorsError } =
+      await supabase.auth.mfa.listFactors();
+    const factor = factors?.totp.find((f) => f.status === "verified");
+    if (factorsError || !factor) {
+      return {
+        ok: false,
+        error: factorsError?.message ?? "No 2FA method found on this account.",
+      };
+    }
+
+    const { data: challenge, error: challengeError } =
+      await supabase.auth.mfa.challenge({ factorId: factor.id });
+    if (challengeError || !challenge) {
+      return {
+        ok: false,
+        error: challengeError?.message ?? "Couldn't verify that code.",
+      };
+    }
+
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId: factor.id,
+      challengeId: challenge.id,
+      code: code.trim(),
+    });
+    if (verifyError) return { ok: false, error: verifyError.message };
+
+    await get().refreshMfaStatus();
+    return { ok: true };
+  },
+
+  disableMfa: async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error || !data)
+      return {
+        ok: false,
+        error: error?.message ?? "Couldn't load 2FA status.",
+      };
+
+    for (const factor of data.totp) {
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({
+        factorId: factor.id,
+      });
+      if (unenrollError) return { ok: false, error: unenrollError.message };
+    }
+
+    await get().refreshMfaStatus();
+    return { ok: true };
   },
 }));

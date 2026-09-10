@@ -533,6 +533,7 @@ export default function ProfileScreen() {
               iconBg={theme.chipBg}
               iconColor={theme.text}
               title="Privacy & Security"
+              onPress={() => router.push("/privacy-security")}
               right={
                 <MaterialIcons
                   name="chevron-right"
