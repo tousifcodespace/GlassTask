@@ -99,6 +99,7 @@ export default function AllTasksScreen() {
   const confirmDeleteOnce = () => {
     if (!deleteTarget) return;
     cancelScheduledNotification(deleteTarget.notificationId);
+    cancelScheduledNotification(deleteTarget.startNotificationId);
     removeTask(deleteTarget.id);
     setDeleteTarget(null);
   };

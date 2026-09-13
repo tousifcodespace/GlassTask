@@ -146,6 +146,48 @@ export default function CalendarScreen() {
 
   const dotSlotCount = Math.min(Math.max(selectedDayTasks.length, 3), 8);
 
+  // "Focus Flow" = actual scheduled time completed on the selected day,
+  // from each task's own duration — previously this whole card was
+  // hardcoded ("4.5h", "+18%"), unconnected to any real task data.
+  const focusMinutesForDay = (dayTasks: Task[]) =>
+    dayTasks
+      .filter((t) => t.done)
+      .reduce((sum, t) => sum + t.durationMinutes, 0);
+
+  const selectedFocusMinutes = focusMinutesForDay(selectedDayTasks);
+  const totalScheduledMinutesForDay = selectedDayTasks.reduce(
+    (sum, t) => sum + t.durationMinutes,
+    0,
+  );
+  const focusHoursLabel = (selectedFocusMinutes / 60).toFixed(
+    selectedFocusMinutes % 60 === 0 ? 0 : 1,
+  );
+  const focusBarPercent =
+    totalScheduledMinutesForDay === 0
+      ? 0
+      : Math.min(
+          100,
+          Math.round(
+            (selectedFocusMinutes / totalScheduledMinutesForDay) * 100,
+          ),
+        );
+
+  const previousDate = new Date(selectedDate);
+  previousDate.setDate(previousDate.getDate() - 1);
+  const previousFocusMinutes = focusMinutesForDay(
+    tasksByDate[toISODate(previousDate)] ?? [],
+  );
+  const focusChangeLabel =
+    previousFocusMinutes === 0
+      ? selectedFocusMinutes > 0
+        ? "New today"
+        : null
+      : `${selectedFocusMinutes >= previousFocusMinutes ? "+" : ""}${Math.round(
+          ((selectedFocusMinutes - previousFocusMinutes) /
+            previousFocusMinutes) *
+            100,
+        )}% vs yesterday`;
+
   return (
     <View style={{ flex: 1 }}>
       <LinearGradient
@@ -302,14 +344,16 @@ export default function CalendarScreen() {
                   className="text-[22px] font-extrabold"
                   style={{ color: theme.text }}
                 >
-                  4.5h
+                  {focusHoursLabel}h
                 </Text>
-                <Text
-                  className="text-[11.5px] font-semibold"
-                  style={{ color: "#3fe0c5" }}
-                >
-                  +18% today
-                </Text>
+                {focusChangeLabel && (
+                  <Text
+                    className="text-[11.5px] font-semibold"
+                    style={{ color: "#3fe0c5" }}
+                  >
+                    {focusChangeLabel}
+                  </Text>
+                )}
               </View>
               <View
                 style={{
@@ -323,7 +367,11 @@ export default function CalendarScreen() {
                   colors={["#7c6cf6", "#22d3ee"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={{ width: "70%", height: "100%", borderRadius: 3 }}
+                  style={{
+                    width: `${focusBarPercent}%`,
+                    height: "100%",
+                    borderRadius: 3,
+                  }}
                 />
               </View>
             </GlassCard>

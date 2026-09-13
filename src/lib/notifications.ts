@@ -68,9 +68,41 @@ export async function scheduleTaskReminder(
   return id;
 }
 
-export async function cancelScheduledNotification(notificationId: string | null) {
+export async function cancelScheduledNotification(
+  notificationId: string | null,
+) {
   if (!notificationId) return;
   await Notifications.cancelScheduledNotificationAsync(notificationId);
+}
+
+/**
+ * Schedules the exact-start-time alert for a task — separate from the
+ * "before" reminder above, this fires right when the scheduled time
+ * arrives, regardless of what reminder offset the user picked.
+ */
+export async function scheduleTaskStartNotification(
+  task: Task,
+): Promise<string | null> {
+  const granted = await ensureNotificationPermission();
+  if (!granted) return null;
+  await ensureAndroidChannel();
+
+  const dueAt = parseScheduledDateTime(task);
+  if (dueAt.getTime() <= Date.now()) return null;
+
+  return await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `Time to start: ${task.title}`,
+      body: "Open GlassTask to start your focus timer.",
+      sound: "default",
+      data: { taskId: task.id, kind: "task-start" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: dueAt,
+      channelId: "task-reminders",
+    },
+  });
 }
 
 /** Fired when an in-app focus timer finishes. */
@@ -83,5 +115,33 @@ export async function notifyTimerComplete(taskTitle: string) {
       sound: "default",
     },
     trigger: null, // fire immediately
+  });
+}
+
+/**
+ * Schedules the completion alert for a running focus session, `seconds`
+ * from now. Scheduled as a real OS notification (not just an in-app
+ * timer) so it still fires if the app is backgrounded or closed.
+ */
+export async function scheduleFocusCompleteNotification(
+  taskTitle: string,
+  seconds: number,
+): Promise<string | null> {
+  const granted = await ensureNotificationPermission();
+  if (!granted) return null;
+  await ensureAndroidChannel();
+
+  return await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Time's up",
+      body: `Your focus session for "${taskTitle}" has ended.`,
+      sound: "default",
+      data: { kind: "focus-complete" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(1, Math.round(seconds)),
+      channelId: "task-reminders",
+    },
   });
 }

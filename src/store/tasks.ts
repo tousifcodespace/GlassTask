@@ -42,8 +42,10 @@ export type Task = {
    * stops *future* generation, it never rewrites history.
    */
   seriesActive: boolean;
-  /** expo-notifications identifier for the scheduled due-time alert, so it can be cancelled/rescheduled. */
+  /** expo-notifications identifier for the "before" reminder alert, so it can be cancelled/rescheduled. */
   notificationId: string | null;
+  /** expo-notifications identifier for the exact-start-time alert, so it can be cancelled/rescheduled. */
+  startNotificationId: string | null;
   /** Optional URL (meeting link, doc, etc.) shown as a quick-open action on the task. */
   link: string;
 };
@@ -296,6 +298,7 @@ type TaskStore = {
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   moveTaskToToday: (id: string) => void;
   setNotificationId: (id: string, notificationId: string | null) => void;
+  setStartNotificationId: (id: string, notificationId: string | null) => void;
   rolloverRecurringTasks: () => void;
 };
 
@@ -344,6 +347,7 @@ export const useTaskStore = create<TaskStore>()(
               templateId: null,
               seriesActive: true,
               notificationId: null,
+              startNotificationId: null,
               link: input.link?.trim() ?? "",
             },
             ...state.tasks,
@@ -403,7 +407,9 @@ export const useTaskStore = create<TaskStore>()(
 
         if (target.repeat === "none") {
           set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
-          return target.notificationId ? [target.notificationId] : [];
+          return [target.notificationId, target.startNotificationId].filter(
+            (n): n is string => !!n,
+          );
         }
 
         const rootId = target.templateId ?? target.id;
@@ -420,7 +426,10 @@ export const useTaskStore = create<TaskStore>()(
             // Today's and future occurrences haven't happened yet — safe
             // to drop entirely, nothing there to preserve.
             if (t.scheduledDateISO >= todayISO) {
-              if (t.notificationId) cancelledNotificationIds.push(t.notificationId);
+              if (t.notificationId)
+                cancelledNotificationIds.push(t.notificationId);
+              if (t.startNotificationId)
+                cancelledNotificationIds.push(t.startNotificationId);
               return acc;
             }
             // Past occurrences keep their real done/undone status; just
@@ -464,6 +473,13 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === id ? { ...t, notificationId } : t,
+          ),
+        })),
+
+      setStartNotificationId: (id, startNotificationId) =>
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === id ? { ...t, startNotificationId } : t,
           ),
         })),
 
@@ -512,6 +528,7 @@ export const useTaskStore = create<TaskStore>()(
               templateId: rootId,
               seriesActive: true,
               notificationId: null,
+              startNotificationId: null,
               link: sample.link,
             });
           }

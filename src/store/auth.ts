@@ -7,6 +7,31 @@ import { supabase } from "@/lib/supabase";
 import { useProfileStore } from "@/store/profile";
 
 /**
+ * A password-recovery link gives Supabase a real session (so
+ * reset-password.tsx can call updateUser()), but it isn't a real login —
+ * and because sessions sync across browser tabs via localStorage, without
+ * this guard every other open tab would see that session and redirect
+ * straight into the dashboard before the user has actually set a new
+ * password. This flag is the authoritative "don't treat this as logged in
+ * yet" signal, checked both by the live onAuthStateChange listener (which
+ * fires in every tab) and by the initial getSession() read (for a tab that
+ * mounts fresh — e.g. a reload — while recovery is still in progress,
+ * where the PASSWORD_RECOVERY event itself isn't replayed).
+ */
+const RECOVERY_FLAG_KEY = "glasstask_password_recovery_in_progress";
+
+function isRecoveryInProgress(): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined") return false;
+  return window.localStorage.getItem(RECOVERY_FLAG_KEY) === "1";
+}
+
+function setRecoveryInProgress(value: boolean) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  if (value) window.localStorage.setItem(RECOVERY_FLAG_KEY, "1");
+  else window.localStorage.removeItem(RECOVERY_FLAG_KEY);
+}
+
+/**
  * Where Supabase should send the user after they click the password-reset
  * link in their email. On web this is just the current site's own
  * /reset-password page. On native there's no browser to land in — this
@@ -117,31 +142,47 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     };
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const recovering = isRecoveryInProgress();
       set({
         session,
         user: session?.user ?? null,
-        isAuthenticated: !!session,
+        isAuthenticated: !!session && !recovering,
         hasHydrated: true,
       });
-      if (session?.user) {
+      if (session?.user && !recovering) {
         useProfileStore.getState().fetchProfile(session.user.id);
         await syncMfaStatus();
       }
     });
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryInProgress(true);
+        // Keep session/user updated — reset-password.tsx needs a session
+        // to call updateUser() — but deliberately leave isAuthenticated
+        // alone so this doesn't read as "logged in" anywhere, including
+        // other already-open tabs that receive this same event.
+        set({ session, user: session?.user ?? null });
+        return;
+      }
+
+      if (event === "SIGNED_OUT") {
+        setRecoveryInProgress(false);
+      }
+
+      const recovering = isRecoveryInProgress();
       set({
         session,
         user: session?.user ?? null,
-        isAuthenticated: !!session,
+        isAuthenticated: !!session && !recovering,
       });
       // Keep the profile store scoped to whoever is actually logged in —
       // without this, switching accounts on the same device/browser would
       // keep showing the previous user's cached name/bio/etc.
-      if (session?.user) {
+      if (session?.user && !recovering) {
         useProfileStore.getState().fetchProfile(session.user.id);
         await syncMfaStatus();
-      } else {
+      } else if (!session) {
         useProfileStore.getState().clearProfile();
         set({ mfaRequired: false });
       }
@@ -149,6 +190,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   register: async (fullName, email, password) => {
+    setRecoveryInProgress(false);
     const normalizedEmail = email.trim().toLowerCase();
     if (!fullName.trim() || !normalizedEmail || password.length < 8) {
       return {
@@ -187,6 +229,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   login: async (email, password) => {
+    setRecoveryInProgress(false);
     set({ isLoading: true });
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
@@ -266,6 +309,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: false });
 
     if (error) return { ok: false, error: error.message };
+    setRecoveryInProgress(false);
     return { ok: true };
   },
 

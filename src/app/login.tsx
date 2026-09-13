@@ -36,12 +36,12 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      showAlert("Missing info", "Enter both email and password.");
+      showAlert("Missing info", "Enter both email and password.", "warning");
       return;
     }
     const result = await login(email, password);
     if (!result.ok) {
-      showAlert("Couldn't log in", result.error);
+      showAlert("Couldn't log in", result.error, "error");
       return;
     }
     router.replace("/");
@@ -246,7 +246,11 @@ export default function LoginScreen() {
                 onPress={async () => {
                   const result = await signInWithGoogle();
                   if (!result.ok) {
-                    showAlert("Couldn't sign in with Google", result.error);
+                    showAlert(
+                      "Couldn't sign in with Google",
+                      result.error,
+                      "error",
+                    );
                   }
                   // On success, the browser is already navigating to
                   // Google — there's nothing further to do here.

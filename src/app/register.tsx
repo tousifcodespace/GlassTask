@@ -71,6 +71,7 @@ export default function RegisterScreen() {
       showAlert(
         "Almost there",
         "Please agree to the Terms of Service and Privacy Policy first.",
+        "warning",
       );
       return;
     }
@@ -78,7 +79,7 @@ export default function RegisterScreen() {
     const result = await register(fullName, email, password);
     setIsSubmitting(false);
     if (!result.ok) {
-      showAlert("Couldn't create account", result.error);
+      showAlert("Couldn't create account", result.error, "error");
       return;
     }
     // No client-side profile write needed here: the `profiles` table has a
@@ -88,12 +89,17 @@ export default function RegisterScreen() {
     // once a session exists.
 
     if (result.signedIn) {
-      showAlert("Welcome to GlassTask", "Your account is ready to go.");
+      showAlert(
+        "Welcome to GlassTask",
+        "Your account is ready to go.",
+        "success",
+      );
       router.replace("/");
     } else {
       showAlert(
         "Check your email",
         "We've sent a confirmation link — verify your email, then log in.",
+        "success",
       );
       router.replace("/login");
     }
@@ -397,7 +403,11 @@ export default function RegisterScreen() {
                 onPress={async () => {
                   const result = await signInWithGoogle();
                   if (!result.ok) {
-                    showAlert("Couldn't sign in with Google", result.error);
+                    showAlert(
+                      "Couldn't sign in with Google",
+                      result.error,
+                      "error",
+                    );
                   }
                 }}
                 className="flex-row items-center justify-center gap-2.5 py-3.5 rounded-2xl"

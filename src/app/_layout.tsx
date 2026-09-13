@@ -15,6 +15,8 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { FocusPromptModal } from "@/components/focus-prompt-modal";
+import { ThemedAlert } from "@/components/themed-alert";
 import { useAppTheme } from "@/hooks/use-app-theme";
 import { useAuthStore } from "@/store/auth";
 import { useTaskStore } from "@/store/tasks";
@@ -95,6 +97,8 @@ export default function RootLayout() {
         <StatusBar style={theme.statusBarStyle} />
         <AnimatedSplashOverlay />
         <Stack screenOptions={{ headerShown: false }} />
+        <ThemedAlert />
+        {isAuthenticated && !mfaRequired && <FocusPromptModal />}
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -20,6 +20,7 @@ import { useAppTheme } from "@/hooks/use-app-theme";
 import {
   cancelScheduledNotification,
   scheduleTaskReminder,
+  scheduleTaskStartNotification,
 } from "@/lib/notifications";
 import { TAB_ROUTES } from "@/lib/tab-routes";
 import { useProfileStore } from "@/store/profile";
@@ -48,20 +49,26 @@ export default function HomeScreen() {
   const toggleTask = useTaskStore((s) => s.toggleTask);
   const moveTaskToToday = useTaskStore((s) => s.moveTaskToToday);
   const setNotificationId = useTaskStore((s) => s.setNotificationId);
+  const setStartNotificationId = useTaskStore((s) => s.setStartNotificationId);
 
   const handleToggleTask = (id: string) => {
     const task = tasks.find((t) => t.id === id);
     toggleTask(id);
-    // Marking done: cancel the pending "time to start" alert, it's no longer needed.
+    // Marking done: cancel the pending "time to start" alerts, they're no longer needed.
     if (task && !task.done) {
       cancelScheduledNotification(task.notificationId);
+      cancelScheduledNotification(task.startNotificationId);
       setNotificationId(id, null);
+      setStartNotificationId(id, null);
     }
   };
 
   const handleMoveToToday = async (id: string) => {
     const task = tasks.find((t) => t.id === id);
-    if (task) await cancelScheduledNotification(task.notificationId);
+    if (task) {
+      await cancelScheduledNotification(task.notificationId);
+      await cancelScheduledNotification(task.startNotificationId);
+    }
     moveTaskToToday(id);
     const updated = useTaskStore.getState().tasks.find((t) => t.id === id);
     if (updated) {
@@ -70,6 +77,9 @@ export default function HomeScreen() {
         updated.reminderMinutesBefore,
       );
       setNotificationId(id, notificationId);
+
+      const startNotificationId = await scheduleTaskStartNotification(updated);
+      setStartNotificationId(id, startNotificationId);
     }
   };
   const profile = useProfileStore((s) => s.profile);
@@ -87,9 +97,13 @@ export default function HomeScreen() {
 
   const filteredTasks = useMemo(
     () =>
-      activeFilter === "All"
-        ? tasks
-        : tasks.filter((t) => CATEGORY_LABELS[t.category] === activeFilter),
+      tasks
+        .filter((t) => !t.done)
+        .filter(
+          (t) =>
+            activeFilter === "All" ||
+            CATEGORY_LABELS[t.category] === activeFilter,
+        ),
     [tasks, activeFilter],
   );
 
