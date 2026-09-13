@@ -24,6 +24,7 @@ import { useAppTheme } from "@/hooks/use-app-theme";
 import {
   cancelScheduledNotification,
   scheduleTaskReminder,
+  scheduleTaskStartNotification,
 } from "@/lib/notifications";
 import { useSettingsStore } from "@/store/settings";
 import {
@@ -488,6 +489,7 @@ export default function NewTaskScreen() {
   const addTask = useTaskStore((s) => s.addTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const setNotificationId = useTaskStore((s) => s.setNotificationId);
+  const setStartNotificationId = useTaskStore((s) => s.setStartNotificationId);
   const reminderOffsetMinutes = useSettingsStore(
     (s) => s.reminderOffsetMinutes,
   );
@@ -579,6 +581,7 @@ export default function NewTaskScreen() {
       id = existingTask.id;
       updateTask(id, taskInput);
       await cancelScheduledNotification(existingTask.notificationId);
+      await cancelScheduledNotification(existingTask.startNotificationId);
     } else {
       id = addTask(taskInput);
     }
@@ -590,6 +593,10 @@ export default function NewTaskScreen() {
         reminderMinutesBefore,
       );
       setNotificationId(id, notificationId);
+
+      const startNotificationId =
+        await scheduleTaskStartNotification(savedTask);
+      setStartNotificationId(id, startNotificationId);
     }
 
     router.canGoBack() ? router.back() : router.replace("/");
